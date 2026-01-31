@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, Settings, Plus, Sparkles } from "lucide-react";
+import { MessageSquare, Settings, Plus, Sparkles, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/agents", label: "Agents", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -78,7 +79,8 @@ export function Sidebar({ conversations, onNewChat }: SidebarProps) {
           const isActive =
             pathname === item.href ||
             (item.href === "/chat" && pathname.startsWith("/chat/")) ||
-            (item.href === "/settings" && pathname.startsWith("/settings"));
+            (item.href === "/settings" && pathname.startsWith("/settings")) ||
+            (item.href === "/agents" && pathname.startsWith("/agents"));
 
           return (
             <Link

@@ -119,6 +119,90 @@ body::before {
 .loading-dot:nth-child(2) { animation: bounce-dot 1.2s ease-in-out 0.15s infinite; }
 .loading-dot:nth-child(3) { animation: bounce-dot 1.2s ease-in-out 0.3s infinite; }
 
+/* Active agent pulse */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
+  50% { opacity: 0.4; box-shadow: 0 0 1px currentColor; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Shimmer sweep for active cards */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(232, 164, 74, 0.03) 40%,
+    rgba(232, 164, 74, 0.06) 50%,
+    rgba(232, 164, 74, 0.03) 60%,
+    transparent 100%
+  );
+  animation: shimmer-sweep 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Scale-in for stat cards */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.35s ease-out forwards;
+}
+
+/* Timeline entry appear */
+@keyframes timeline-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-timeline-in {
+  animation: timeline-in 0.25s ease-out forwards;
+}
+
+/* Subtle glow line on left border */
+.accent-line-left {
+  position: relative;
+}
+
+.accent-line-left::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  opacity: 0.6;
+}
+
+/* Grid pattern background for dashboard header */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(232, 164, 74, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 164, 74, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Gradient mesh for card backgrounds */
+.mesh-gradient {
+  background:
+    radial-gradient(ellipse at 10% 20%, rgba(232, 164, 74, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 80%, rgba(74, 222, 128, 0.02) 0%, transparent 50%);
+}
+
 /* Input focus ring */
 .input-focus {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
