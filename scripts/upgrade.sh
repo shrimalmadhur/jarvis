@@ -53,10 +53,11 @@ echo ""
 echo "Restarting $SERVICE_NAME..."
 
 if [ "$OS" = "Darwin" ]; then
-    sudo launchctl kickstart -k system/"$PLIST_LABEL"
+    ACTUAL_UID="$(id -u)"
+    launchctl kickstart -k gui/"$ACTUAL_UID"/"$PLIST_LABEL"
 
     sleep 2
-    if launchctl print system/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then
+    if launchctl print gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then
         COMMIT=$(git rev-parse --short HEAD)
         green ""
         green "Jarvis upgraded to $COMMIT and running"

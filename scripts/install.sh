@@ -13,7 +13,6 @@ OS="$(uname -s)"
 
 # macOS launchd identifiers
 PLIST_LABEL="com.jarvis.agent"
-PLIST_PATH="/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 LOG_DIR="/var/log/jarvis"
 
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
@@ -114,36 +113,50 @@ fi
 echo ""
 
 if [ "$OS" = "Darwin" ]; then
-    # --- macOS: launchd ---
-    echo "Installing launchd service..."
+    # --- macOS: LaunchAgent (user-level) ---
+    # LaunchDaemons can't access user home directories due to macOS privacy restrictions.
+    # LaunchAgents run in the user's session and have full filesystem access.
+    echo "Installing launchd agent..."
 
     # Create log directory
     mkdir -p "$LOG_DIR"
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$LOG_DIR"
 
-    # Generate plist with actual paths and user
-    sed -e "s|__USER__|$ACTUAL_USER|g" \
-        -e "s|__REPO_DIR__|$REPO_DIR|g" \
+    ACTUAL_HOME="$(eval echo ~"$ACTUAL_USER")"
+    ACTUAL_UID="$(id -u "$ACTUAL_USER")"
+    AGENT_DIR="$ACTUAL_HOME/Library/LaunchAgents"
+    PLIST_PATH="$AGENT_DIR/$PLIST_LABEL.plist"
+
+    mkdir -p "$AGENT_DIR"
+    chown "$ACTUAL_USER:$ACTUAL_GROUP" "$AGENT_DIR"
+
+    # Remove old system LaunchDaemon if it exists (migration)
+    launchctl bootout system/"$PLIST_LABEL" 2>/dev/null || true
+    rm -f "/Library/LaunchDaemons/${PLIST_LABEL}.plist"
+
+    # Generate plist with actual paths
+    sed -e "s|__REPO_DIR__|$REPO_DIR|g" \
         "$REPO_DIR/jarvis.plist" > "$PLIST_PATH"
+    chown "$ACTUAL_USER:$ACTUAL_GROUP" "$PLIST_PATH"
 
     # Unload if already loaded, then load
-    launchctl bootout system/"$PLIST_LABEL" 2>/dev/null || true
-    launchctl bootstrap system "$PLIST_PATH"
+    launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
+    launchctl bootstrap gui/"$ACTUAL_UID" "$PLIST_PATH"
 
     sleep 2
-    if launchctl print system/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then
+    if launchctl print gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then
         green ""
         green "Jarvis is installed and running on port $PORT"
         green ""
         echo "Useful commands:"
-        echo "  sudo launchctl print system/$PLIST_LABEL   # Check status"
-        echo "  sudo launchctl kickstart -k system/$PLIST_LABEL  # Restart"
-        echo "  sudo launchctl kill SIGTERM system/$PLIST_LABEL  # Stop"
-        echo "  tail -f $LOG_DIR/jarvis.log                # Follow logs"
+        echo "  launchctl print gui/$ACTUAL_UID/$PLIST_LABEL   # Check status"
+        echo "  launchctl kickstart -k gui/$ACTUAL_UID/$PLIST_LABEL  # Restart"
+        echo "  launchctl kill SIGTERM gui/$ACTUAL_UID/$PLIST_LABEL  # Stop"
+        echo "  tail -f $LOG_DIR/jarvis.log                    # Follow logs"
         echo ""
         if grep -q '^DATABASE_URL=$' "$ENV_FILE" 2>/dev/null; then
             yellow "Next step: Edit $ENV_FILE with your API keys, then restart:"
-            yellow "  sudo launchctl kickstart -k system/$PLIST_LABEL"
+            yellow "  launchctl kickstart -k gui/$ACTUAL_UID/$PLIST_LABEL"
         fi
     else
         red "Service failed to start. Check logs:"

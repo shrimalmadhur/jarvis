@@ -9,8 +9,6 @@
         <string>/bin/bash</string>
         <string>__REPO_DIR__/scripts/run.sh</string>
     </array>
-    <key>UserName</key>
-    <string>__USER__</string>
     <key>WorkingDirectory</key>
     <string>__REPO_DIR__/.next/standalone</string>
     <key>RunAtLoad</key>
