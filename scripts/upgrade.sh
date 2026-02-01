@@ -11,6 +11,7 @@ OS="$(uname -s)"
 # macOS launchd identifiers
 PLIST_LABEL="com.jarvis.agent"
 LOG_DIR="/var/log/jarvis"
+INSTALL_DIR="/usr/local/lib/jarvis"
 
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -47,6 +48,14 @@ fi
 
 mkdir -p "$STANDALONE_DIR/.next"
 cp -r "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
+
+# --- Deploy to install directory ---
+echo ""
+echo "Deploying to $INSTALL_DIR..."
+rm -rf "$INSTALL_DIR"/* "$INSTALL_DIR"/.next 2>/dev/null || true
+cp -r "$STANDALONE_DIR/." "$INSTALL_DIR/"
+cp "$REPO_DIR/scripts/run.sh" "$INSTALL_DIR/run.sh"
+chmod +x "$INSTALL_DIR/run.sh"
 
 # --- Restart service (OS-specific) ---
 echo ""

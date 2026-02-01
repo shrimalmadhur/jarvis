@@ -7,10 +7,10 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>__REPO_DIR__/scripts/run.sh</string>
+        <string>__INSTALL_DIR__/run.sh</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>__REPO_DIR__/.next/standalone</string>
+    <string>__INSTALL_DIR__</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

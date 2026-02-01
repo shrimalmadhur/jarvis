@@ -14,6 +14,7 @@ OS="$(uname -s)"
 # macOS launchd identifiers
 PLIST_LABEL="com.jarvis.agent"
 LOG_DIR="/var/log/jarvis"
+INSTALL_DIR="/usr/local/lib/jarvis"
 
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -28,6 +29,7 @@ fi
 
 ACTUAL_USER="${SUDO_USER:-$(whoami)}"
 ACTUAL_GROUP="$(id -gn "$ACTUAL_USER")"
+ACTUAL_UID="$(id -u "$ACTUAL_USER")"
 
 # --- Check prerequisites ---
 echo "Checking prerequisites..."
@@ -50,6 +52,16 @@ if ! command -v pnpm &>/dev/null; then
 fi
 green "  pnpm $(pnpm -v)"
 green "  OS: $OS"
+
+# --- Stop existing service to prevent error spam during build ---
+echo ""
+echo "Stopping existing service (if running)..."
+if [ "$OS" = "Darwin" ]; then
+    launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
+    launchctl bootout system/"$PLIST_LABEL" 2>/dev/null || true
+else
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+fi
 
 # --- Install dependencies and build ---
 echo ""
@@ -84,6 +96,16 @@ cp -r "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
 
 # Fix ownership — cp/mkdir ran as root, but the service runs as $ACTUAL_USER
 chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$REPO_DIR/.next"
+
+# --- Deploy to install directory (avoids macOS TCC restrictions on ~/Desktop etc.) ---
+echo ""
+echo "Deploying to $INSTALL_DIR..."
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+cp -r "$STANDALONE_DIR/." "$INSTALL_DIR/"
+cp "$REPO_DIR/scripts/run.sh" "$INSTALL_DIR/run.sh"
+chmod +x "$INSTALL_DIR/run.sh"
+chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$INSTALL_DIR"
 
 # --- Create environment file ---
 echo ""
@@ -123,7 +145,6 @@ if [ "$OS" = "Darwin" ]; then
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$LOG_DIR"
 
     ACTUAL_HOME="$(eval echo ~"$ACTUAL_USER")"
-    ACTUAL_UID="$(id -u "$ACTUAL_USER")"
     AGENT_DIR="$ACTUAL_HOME/Library/LaunchAgents"
     PLIST_PATH="$AGENT_DIR/$PLIST_LABEL.plist"
 
@@ -135,7 +156,7 @@ if [ "$OS" = "Darwin" ]; then
     rm -f "/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 
     # Generate plist with actual paths
-    sed -e "s|__REPO_DIR__|$REPO_DIR|g" \
+    sed -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
         "$REPO_DIR/jarvis.plist" > "$PLIST_PATH"
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$PLIST_PATH"
 
@@ -169,7 +190,7 @@ else
     # Generate service file with actual paths and user
     sed -e "s|__USER__|$ACTUAL_USER|g" \
         -e "s|__GROUP__|$ACTUAL_GROUP|g" \
-        -e "s|__REPO_DIR__|$REPO_DIR|g" \
+        -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
         "$REPO_DIR/jarvis.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
 
     systemctl daemon-reload

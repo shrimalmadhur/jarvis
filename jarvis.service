@@ -8,14 +8,14 @@ Type=simple
 User=__USER__
 Group=__GROUP__
 
-WorkingDirectory=__REPO_DIR__/.next/standalone
+WorkingDirectory=__INSTALL_DIR__
 
 EnvironmentFile=/etc/jarvis/env
 Environment=NODE_ENV=production
 Environment=PORT=7749
 Environment=HOSTNAME=0.0.0.0
 
-ExecStart=/bin/bash __REPO_DIR__/scripts/run.sh
+ExecStart=/bin/bash __INSTALL_DIR__/run.sh
 
 Restart=on-failure
 RestartSec=5
