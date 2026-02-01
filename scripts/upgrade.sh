@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure common Node.js install paths are on PATH (Homebrew on Apple Silicon, etc.)
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="jarvis"
 OS="$(uname -s)"
@@ -25,6 +28,7 @@ pnpm install --frozen-lockfile
 # --- Build ---
 echo ""
 echo "Building for production..."
+rm -rf "$REPO_DIR/.next" 2>/dev/null || sudo rm -rf "$REPO_DIR/.next"
 pnpm build
 
 # --- Copy static assets into standalone dir ---

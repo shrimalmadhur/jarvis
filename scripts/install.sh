@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure common Node.js install paths are on PATH (Homebrew on Apple Silicon, etc.)
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="jarvis"
 ENV_DIR="/etc/jarvis"
@@ -57,6 +60,7 @@ sudo -u "$ACTUAL_USER" pnpm install --frozen-lockfile
 
 echo ""
 echo "Building for production..."
+rm -rf "$REPO_DIR/.next"
 sudo -u "$ACTUAL_USER" pnpm build
 
 # --- Copy static assets into standalone dir ---
@@ -78,6 +82,9 @@ fi
 # .next/static/ directory
 mkdir -p "$STANDALONE_DIR/.next"
 cp -r "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
+
+# Fix ownership — cp/mkdir ran as root, but the service runs as $ACTUAL_USER
+chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$REPO_DIR/.next"
 
 # --- Create environment file ---
 echo ""
@@ -148,6 +155,7 @@ else
 
     # Generate service file with actual paths and user
     sed -e "s|__USER__|$ACTUAL_USER|g" \
+        -e "s|__GROUP__|$ACTUAL_GROUP|g" \
         -e "s|__REPO_DIR__|$REPO_DIR|g" \
         "$REPO_DIR/jarvis.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
 
