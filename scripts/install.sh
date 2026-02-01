@@ -44,7 +44,8 @@ if [ "$NODE_VERSION" -lt 20 ]; then
     red "Error: Node.js >= 20 required (found v$(node -v))"
     exit 1
 fi
-green "  node $(node -v)"
+NODE_BIN_DIR="$(dirname "$(command -v node)")"
+green "  node $(node -v) ($NODE_BIN_DIR)"
 
 if ! command -v pnpm &>/dev/null; then
     red "Error: pnpm is not installed"
@@ -102,8 +103,8 @@ echo ""
 echo "Deploying to $INSTALL_DIR..."
 rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
-cp -r "$STANDALONE_DIR/." "$INSTALL_DIR/"
-cp "$REPO_DIR/scripts/run.sh" "$INSTALL_DIR/run.sh"
+cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
+sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
 chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$INSTALL_DIR"
 

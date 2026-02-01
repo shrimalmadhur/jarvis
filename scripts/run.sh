@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure common Node.js install paths are on PATH (needed for launchd on macOS)
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Ensure Node.js is on PATH (needed for launchd on macOS which doesn't load shell profiles)
+# __NODE_BIN_DIR__ is replaced by install.sh with the actual path at install time
+export PATH="__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # Source environment variables
 if [ -f /etc/jarvis/env ]; then
