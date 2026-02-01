@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=__USER__
-Group=__USER__
+Group=__GROUP__
 
 WorkingDirectory=__REPO_DIR__/.next/standalone
 
@@ -15,7 +15,7 @@ Environment=NODE_ENV=production
 Environment=PORT=7749
 Environment=HOSTNAME=0.0.0.0
 
-ExecStart=/usr/bin/node server.js
+ExecStart=/bin/bash __REPO_DIR__/scripts/run.sh
 
 Restart=on-failure
 RestartSec=5
