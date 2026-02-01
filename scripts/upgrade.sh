@@ -7,6 +7,9 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="jarvis"
 OS="$(uname -s)"
+ACTUAL_USER="$(whoami)"
+ACTUAL_GROUP="$(id -gn "$ACTUAL_USER")"
+NODE_BIN_DIR="$(dirname "$(command -v node)")"
 
 # macOS launchd identifiers
 PLIST_LABEL="com.jarvis.agent"
@@ -43,18 +46,18 @@ if [ ! -f "$STANDALONE_DIR/server.js" ]; then
 fi
 
 if [ -d "$REPO_DIR/public" ]; then
-    cp -r "$REPO_DIR/public" "$STANDALONE_DIR/public"
+    cp -R "$REPO_DIR/public" "$STANDALONE_DIR/public"
 fi
 
 mkdir -p "$STANDALONE_DIR/.next"
-cp -r "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
+cp -R "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
 
 # --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
 rm -rf "$INSTALL_DIR"/* "$INSTALL_DIR"/.next 2>/dev/null || true
-cp -r "$STANDALONE_DIR/." "$INSTALL_DIR/"
-cp "$REPO_DIR/scripts/run.sh" "$INSTALL_DIR/run.sh"
+cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
+sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
 
 # --- Restart service (OS-specific) ---
