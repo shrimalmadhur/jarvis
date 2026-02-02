@@ -340,6 +340,7 @@ export async function readSessionDetail(
   const lastEntry = entries[entries.length - 1];
   const projectPath = cwd || projectDir.replace(/^-/, "/").replace(/-/g, "/");
   const status = getStatus(fileStat.mtimeMs);
+  const fallbackTime = new Date(fileStat.mtimeMs).toISOString();
 
   const timeline = buildTimeline(entries);
 
@@ -358,8 +359,8 @@ export async function readSessionDetail(
       gitBranch,
       model: model ? shortenModel(model) : null,
       status,
-      created: firstEntry.timestamp,
-      lastActivity: lastEntry.timestamp,
+      created: firstEntry?.timestamp || fallbackTime,
+      lastActivity: lastEntry?.timestamp || fallbackTime,
       totalTokens: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
     },
     timeline,
@@ -421,6 +422,7 @@ export async function readSubAgentDetail(
   const lastEntry = entries[entries.length - 1];
   const projectPath = cwd || projectDir.replace(/^-/, "/").replace(/-/g, "/");
   const status = getStatus(fileStat.mtimeMs);
+  const fallbackTime = new Date(fileStat.mtimeMs).toISOString();
 
   // Sub-agents don't filter out sidechains -- all entries are their own
   const timeline = buildSubAgentTimeline(entries);
@@ -434,8 +436,8 @@ export async function readSubAgentDetail(
       gitBranch,
       model: model ? shortenModel(model) : null,
       status,
-      created: firstEntry.timestamp,
-      lastActivity: lastEntry.timestamp,
+      created: firstEntry?.timestamp || fallbackTime,
+      lastActivity: lastEntry?.timestamp || fallbackTime,
       totalTokens: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
     },
     timeline,
