@@ -4,7 +4,7 @@ import { notifyConversationComplete } from "@/lib/notifications/telegram";
 // POST - send a Telegram notification from an external caller (e.g. Claude Code Stop hook)
 export async function POST(request: Request) {
   try {
-    const { title, message } = await request.json();
+    const { title, message, changes } = await request.json();
 
     if (!title && !message) {
       return NextResponse.json(
@@ -16,7 +16,8 @@ export async function POST(request: Request) {
     notifyConversationComplete(
       title || "Agent update",
       message || "Completed",
-      ""
+      "",
+      changes || undefined
     );
 
     return NextResponse.json({ success: true });

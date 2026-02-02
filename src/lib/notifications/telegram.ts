@@ -88,11 +88,13 @@ function escapeMarkdown(text: string): string {
 /**
  * Send a conversation completion notification to Telegram.
  * Fire-and-forget: catches all errors internally, returns void.
+ * Optionally includes a change summary (e.g. git diff stats from a hook).
  */
 export function notifyConversationComplete(
   title: string,
   assistantMessage: string,
-  conversationId: string
+  conversationId: string,
+  changes?: string
 ): void {
   // Intentionally not awaited -- fire-and-forget
   (async () => {
@@ -100,22 +102,28 @@ export function notifyConversationComplete(
       const config = await getTelegramConfig();
       if (!config) return;
 
-      // Truncate long messages (Telegram limit is 4096 chars)
-      const maxLen = 3000;
+      // Telegram limit is 4096 chars; reserve space for header + changes
+      const changesBlock = changes ? `\n\n\`\`\`\n${changes}\n\`\`\`` : "";
+      const overhead = 200 + changesBlock.length;
+      const maxLen = Math.max(500, 3800 - overhead);
       const truncated =
         assistantMessage.length > maxLen
           ? assistantMessage.substring(0, maxLen) + "..."
           : assistantMessage;
 
-      const text = [
+      const parts = [
         `*Jarvis* \u2014 conversation complete`,
         ``,
         `*${escapeMarkdown(title)}*`,
         ``,
         escapeMarkdown(truncated),
-      ].join("\n");
+      ];
 
-      await sendTelegramMessage(config, text);
+      if (changesBlock) {
+        parts.push(changesBlock);
+      }
+
+      await sendTelegramMessage(config, parts.join("\n"));
     } catch (error) {
       console.error("Telegram notification error:", error);
     }
