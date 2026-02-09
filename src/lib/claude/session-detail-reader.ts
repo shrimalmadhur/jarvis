@@ -24,8 +24,11 @@ function getStatus(mtimeMs: number): "active" | "idle" | "completed" {
 }
 
 function shortenModel(model: string): string {
+  if (model.includes("opus-4-6")) return "Opus 4.6";
   if (model.includes("opus-4-5")) return "Opus 4.5";
+  if (model.includes("sonnet-4-6")) return "Sonnet 4.6";
   if (model.includes("sonnet-4-5")) return "Sonnet 4.5";
+  if (model.includes("haiku-4-6")) return "Haiku 4.6";
   if (model.includes("haiku-4-5")) return "Haiku 4.5";
   if (model.includes("opus-4")) return "Opus 4";
   if (model.includes("sonnet-4")) return "Sonnet 4";
