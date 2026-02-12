@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 
-export default function AgentDetailError({
+export default function SessionDetailError({
   error,
   reset,
 }: {
@@ -14,7 +14,7 @@ export default function AgentDetailError({
   const router = useRouter();
 
   useEffect(() => {
-    console.error("Agent detail error:", error);
+    console.error("Session detail error:", error);
   }, [error]);
 
   return (
@@ -33,11 +33,11 @@ export default function AgentDetailError({
           Retry
         </button>
         <button
-          onClick={() => router.push("/agents")}
+          onClick={() => router.push("/sessions")}
           className="inline-flex items-center gap-1.5 text-[12px] text-accent transition-colors hover:text-accent-dim"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to Agents
+          Back to Sessions
         </button>
       </div>
     </div>

@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+# Full Ubuntu setup script for Jarvis.
+# Run as your regular user (NOT root). It will use sudo where needed.
+#
+# Usage:
+#   bash scripts/setup-ubuntu.sh              # Fresh install
+#   bash scripts/setup-ubuntu.sh --upgrade    # Pull latest + rebuild
+
+set -euo pipefail
+
+red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
+green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
+
+UPGRADE=false
+[[ "${1:-}" == "--upgrade" ]] && UPGRADE=true
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
+echo "============================================"
+echo "  Jarvis Setup for Ubuntu"
+echo "============================================"
+echo ""
+
+# ── 1. System packages ─────────────────────────
+echo "Step 1: Installing system packages..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq build-essential python3 curl git sqlite3 > /dev/null
+green "  System packages installed"
+
+# ── 2. Node.js 22 via NodeSource ────────────────
+if command -v node &>/dev/null; then
+    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
+    if [ "$NODE_VERSION" -ge 20 ]; then
+        green "  Node.js $(node -v) already installed"
+    else
+        yellow "  Node.js $(node -v) is too old, installing v22..."
+        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+        sudo apt-get install -y -qq nodejs > /dev/null
+        green "  Node.js $(node -v) installed"
+    fi
+else
+    echo "  Installing Node.js 22..."
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt-get install -y -qq nodejs > /dev/null
+    green "  Node.js $(node -v) installed"
+fi
+
+# ── 3. pnpm ─────────────────────────────────────
+if ! command -v pnpm &>/dev/null; then
+    echo "  Installing pnpm..."
+    npm install -g pnpm > /dev/null 2>&1
+fi
+green "  pnpm $(pnpm -v)"
+
+# ── 4. Pull latest (if upgrade) ────────────────
+if $UPGRADE; then
+    echo ""
+    echo "Step 2: Pulling latest code..."
+    cd "$REPO_DIR"
+    git pull
+    green "  Code updated"
+fi
+
+# ── 5. Install deps + build ────────────────────
+echo ""
+echo "Step $($UPGRADE && echo 3 || echo 2): Installing dependencies..."
+cd "$REPO_DIR"
+pnpm install --frozen-lockfile
+green "  Dependencies installed"
+
+echo ""
+echo "Step $($UPGRADE && echo 4 || echo 3): Building..."
+pnpm build
+green "  Build complete"
+
+# ── 6. Create directories ──────────────────────
+echo ""
+echo "Step $($UPGRADE && echo 5 || echo 4): Setting up directories..."
+mkdir -p "$REPO_DIR/data"
+sudo mkdir -p /var/log/jarvis
+sudo chown "$(whoami)" /var/log/jarvis
+green "  Directories ready"
+
+# ── 7. Push SQLite schema ──────────────────────
+echo ""
+echo "Step $($UPGRADE && echo 6 || echo 5): Applying database schema..."
+pnpm drizzle-kit push 2>&1 | tail -1
+green "  Database schema applied"
+
+# ── 8. Environment file ────────────────────────
+echo ""
+ENV_FILE="/etc/jarvis/env"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Step $($UPGRADE && echo 7 || echo 6): Creating environment file..."
+    sudo mkdir -p /etc/jarvis
+    sudo tee "$ENV_FILE" > /dev/null << 'ENVEOF'
+# Jarvis Environment Configuration
+
+# Required - get from https://aistudio.google.com/apikey
+GEMINI_API_KEY=
+
+# Web UI password (set to enable auth, leave empty to disable)
+JARVIS_PASSWORD=
+
+# API secret for hook/script access (used by Claude Code hooks, cron scripts)
+# Generate with: openssl rand -hex 32
+JARVIS_API_SECRET=
+
+# Optional providers
+# OPENAI_API_KEY=
+# ANTHROPIC_API_KEY=
+
+# Per-agent Telegram bots
+# FOOD_FACTS_TELEGRAM_BOT_TOKEN=
+# FOOD_FACTS_TELEGRAM_CHAT_ID=
+ENVEOF
+    sudo chown "$(whoami)" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    yellow "  Created $ENV_FILE -- you MUST edit this with your API keys"
+else
+    green "  $ENV_FILE already exists"
+fi
+
+# ── 9. Systemd service (web UI) ────────────────
+echo ""
+echo "Step $($UPGRADE && echo 8 || echo 7): Installing systemd service..."
+INSTALL_DIR="/usr/local/lib/jarvis"
+STANDALONE_DIR="$REPO_DIR/.next/standalone"
+NODE_BIN_DIR="$(dirname "$(command -v node)")"
+
+sudo rm -rf "$INSTALL_DIR"
+sudo mkdir -p "$INSTALL_DIR"
+
+# Copy standalone build
+sudo cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
+
+# Static assets
+if [ -d "$REPO_DIR/public" ]; then
+    sudo cp -r "$REPO_DIR/public" "$INSTALL_DIR/public"
+fi
+sudo mkdir -p "$INSTALL_DIR/.next"
+sudo cp -r "$REPO_DIR/.next/static" "$INSTALL_DIR/.next/static"
+
+# SQLite data directory
+sudo mkdir -p "$INSTALL_DIR/data"
+
+# Native addon
+if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
+    sudo mkdir -p "$INSTALL_DIR/node_modules"
+    sudo cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+fi
+
+# Runner dependencies: agents, source, scripts, configs
+[ -d "$REPO_DIR/agents" ] && sudo cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
+sudo cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
+sudo cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
+sudo cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
+sudo cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
+sudo cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
+
+# run.sh
+sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" | sudo tee "$INSTALL_DIR/run.sh" > /dev/null
+sudo chmod +x "$INSTALL_DIR/run.sh"
+
+sudo chown -R "$(whoami)" "$INSTALL_DIR"
+
+# Install systemd unit
+sudo sed -e "s|__USER__|$(whoami)|g" \
+    -e "s|__GROUP__|$(id -gn)|g" \
+    -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
+    "$REPO_DIR/jarvis.service" > /tmp/jarvis.service
+sudo mv /tmp/jarvis.service /etc/systemd/system/jarvis.service
+
+sudo systemctl daemon-reload
+sudo systemctl enable jarvis
+sudo systemctl restart jarvis
+
+sleep 2
+if sudo systemctl is-active --quiet jarvis; then
+    green "  Jarvis web UI running on port 7749"
+else
+    red "  Service failed to start. Check: sudo journalctl -u jarvis -n 30"
+fi
+
+# ── 10. Cron jobs for agents ───────────────────
+echo ""
+echo "Step $($UPGRADE && echo 9 || echo 8): Installing cron jobs..."
+bash "$REPO_DIR/scripts/install-cron.sh"
+
+# ── Done ────────────────────────────────────────
+echo ""
+echo "============================================"
+green "  Setup complete!"
+echo "============================================"
+echo ""
+echo "Next steps:"
+if grep -q '^GEMINI_API_KEY=$' "$ENV_FILE" 2>/dev/null; then
+    yellow "  1. Edit /etc/jarvis/env with your API keys:"
+    echo "     sudo nano /etc/jarvis/env"
+    echo ""
+    yellow "  2. Add Telegram bot tokens for agents:"
+    echo "     FOOD_FACTS_TELEGRAM_BOT_TOKEN=<token>"
+    echo "     FOOD_FACTS_TELEGRAM_CHAT_ID=<chat_id>"
+    echo ""
+    yellow "  3. Restart after editing:"
+    echo "     sudo systemctl restart jarvis"
+fi
+echo ""
+echo "Useful commands:"
+echo "  sudo systemctl status jarvis          # Web UI status"
+echo "  sudo journalctl -u jarvis -f          # Web UI logs"
+echo "  tail -f /var/log/jarvis/agents.log    # Agent cron logs"
+echo "  crontab -l                            # View scheduled agents"
+echo "  npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts --list   # List agents"
+echo "  npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts food-facts  # Test run"
+echo ""
