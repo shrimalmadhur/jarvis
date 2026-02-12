@@ -54,6 +54,14 @@ fi
 green "  pnpm $(pnpm -v)"
 green "  OS: $OS"
 
+# On Linux, check for build tools needed by better-sqlite3
+if [ "$OS" = "Linux" ]; then
+    if ! command -v make &>/dev/null || ! command -v g++ &>/dev/null; then
+        yellow "  Warning: build-essential not found (needed for better-sqlite3)"
+        yellow "  Install with: sudo apt-get install -y build-essential python3"
+    fi
+fi
+
 # --- Stop existing service to prevent error spam during build ---
 echo ""
 echo "Stopping existing service (if running)..."
@@ -106,6 +114,26 @@ mkdir -p "$INSTALL_DIR"
 cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
 sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
+
+# Create data directory for SQLite database
+mkdir -p "$INSTALL_DIR/data"
+
+# Copy better-sqlite3 native addon (not included in standalone bundle)
+if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
+    mkdir -p "$INSTALL_DIR/node_modules"
+    cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+fi
+
+# Copy agents directory and runner scripts (for cron-based agent execution)
+if [ -d "$REPO_DIR/agents" ]; then
+    cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
+fi
+cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
+cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
+cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
+cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
+cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
+
 chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$INSTALL_DIR"
 
 # --- Create environment file ---
@@ -118,16 +146,29 @@ if [ ! -f "$ENV_FILE" ]; then
 # Edit this file and restart the service (see install output for commands)
 
 # Required
-DATABASE_URL=
 GEMINI_API_KEY=
+
+# Web UI password (set to enable auth, leave empty to disable)
+JARVIS_PASSWORD=
+
+# API secret for hook/script access (used by Claude Code hooks, cron scripts)
+# Generate with: openssl rand -hex 32
+JARVIS_API_SECRET=
 
 # Optional - uncomment and set if using these providers
 # OPENAI_API_KEY=
 # ANTHROPIC_API_KEY=
+
+# Optional - SQLite database path (defaults to data/jarvis.db relative to install dir)
+# DATABASE_PATH=
+
+# Per-agent Telegram bots (for cron runner)
+# FOOD_FACTS_TELEGRAM_BOT_TOKEN=
+# FOOD_FACTS_TELEGRAM_CHAT_ID=
 ENVEOF
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$ENV_FILE"
     chmod 600 "$ENV_FILE"
-    yellow "  Created $ENV_FILE — you must fill in DATABASE_URL and GEMINI_API_KEY"
+    yellow "  Created $ENV_FILE — you must fill in GEMINI_API_KEY"
 else
     green "  $ENV_FILE already exists, keeping existing configuration"
 fi
@@ -176,7 +217,7 @@ if [ "$OS" = "Darwin" ]; then
         echo "  launchctl kill SIGTERM gui/$ACTUAL_UID/$PLIST_LABEL  # Stop"
         echo "  tail -f $LOG_DIR/jarvis.log                    # Follow logs"
         echo ""
-        if grep -q '^DATABASE_URL=$' "$ENV_FILE" 2>/dev/null; then
+        if grep -q '^GEMINI_API_KEY=$' "$ENV_FILE" 2>/dev/null; then
             yellow "Next step: Edit $ENV_FILE with your API keys, then restart:"
             yellow "  launchctl kickstart -k gui/$ACTUAL_UID/$PLIST_LABEL"
         fi
@@ -212,7 +253,7 @@ else
         echo "  sudo systemctl stop jarvis      # Stop"
         echo "  sudo journalctl -u jarvis -f    # Follow logs"
         echo ""
-        if grep -q '^DATABASE_URL=$' "$ENV_FILE" 2>/dev/null; then
+        if grep -q '^GEMINI_API_KEY=$' "$ENV_FILE" 2>/dev/null; then
             yellow "Next step: Edit $ENV_FILE with your API keys, then restart:"
             yellow "  sudo systemctl restart jarvis"
         fi

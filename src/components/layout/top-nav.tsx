@@ -7,13 +7,15 @@ import {
   Settings,
   Plus,
   Sparkles,
-  Activity,
+  Bot,
+  Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/agents", label: "Agents", icon: Activity },
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/sessions", label: "Sessions", icon: Terminal },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -45,8 +47,9 @@ export function TopNav({ onNewChat }: TopNavProps) {
           const isActive =
             pathname === item.href ||
             (item.href === "/chat" && pathname.startsWith("/chat/")) ||
-            (item.href === "/settings" && pathname.startsWith("/settings")) ||
-            (item.href === "/agents" && pathname.startsWith("/agents"));
+            (item.href === "/agents" && pathname.startsWith("/agents")) ||
+            (item.href === "/sessions" && pathname.startsWith("/sessions")) ||
+            (item.href === "/settings" && pathname.startsWith("/settings"));
 
           return (
             <Link

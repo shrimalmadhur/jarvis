@@ -1,22 +1,20 @@
-import { neon, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-import https from "node:https";
-import nodeFetch from "node-fetch";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
+import path from "node:path";
+import fs from "node:fs";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is not set");
-}
+const dbPath =
+  process.env.DATABASE_PATH ||
+  path.join(process.cwd(), "data", "jarvis.db");
 
-// Force IPv4 connections to work around networks where Node.js built-in
-// fetch fails (IPv6 unreachable + connection race timeout).
-// node-fetch uses Node's https module which supports the family:4 option.
-const ipv4Agent = new https.Agent({ family: 4 });
-neonConfig.fetchFunction = ((url: string, init: RequestInit) =>
-  nodeFetch(url, { ...init, agent: ipv4Agent } as never)) as unknown as typeof fetch;
+// Ensure the data directory exists
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-const sql = neon(process.env.DATABASE_URL);
+const sqlite = new Database(dbPath);
+sqlite.pragma("journal_mode = WAL");
+sqlite.pragma("foreign_keys = ON");
 
-export const db = drizzle(sql, { schema });
+export const db = drizzle(sqlite, { schema });
 
 export * from "./schema";

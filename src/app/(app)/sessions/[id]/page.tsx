@@ -196,7 +196,7 @@ function SubAgentCard({
     agent.tokenUsage.outputTokens +
     agent.tokenUsage.cacheReadTokens +
     agent.tokenUsage.cacheCreationTokens;
-  const href = `/agents/${sessionId}?project=${encodeURIComponent(projectDir)}&subagent=${agent.agentId}`;
+  const href = `/sessions/${sessionId}?project=${encodeURIComponent(projectDir)}&subagent=${agent.agentId}`;
 
   return (
     <Link href={href}>
@@ -321,7 +321,7 @@ function TokenStat({
   );
 }
 
-export default function AgentDetailPage() {
+export default function SessionDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const projectDir = searchParams.get("project");
@@ -332,8 +332,8 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const parentHref = projectDir
-    ? `/agents/${params.id}?project=${encodeURIComponent(projectDir)}`
-    : "/agents";
+    ? `/sessions/${params.id}?project=${encodeURIComponent(projectDir)}`
+    : "/sessions";
 
   useEffect(() => {
     if (!projectDir) {
@@ -390,11 +390,11 @@ export default function AgentDetailPage() {
           {error || "Session not found"}
         </p>
         <Link
-          href="/agents"
+          href="/sessions"
           className="inline-flex items-center gap-1.5 text-[12px] text-accent transition-colors hover:text-accent-dim"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to Agents
+          Back to Sessions
         </Link>
       </div>
     );
@@ -413,11 +413,11 @@ export default function AgentDetailPage() {
         {/* Back link + header */}
         <div className="animate-fade-in space-y-4">
           <Link
-            href={subagentId ? parentHref : "/agents"}
+            href={subagentId ? parentHref : "/sessions"}
             className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground group"
           >
             <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-            {subagentId ? "Back to Parent Session" : "Back to Agents"}
+            {subagentId ? "Back to Parent Session" : "Back to Sessions"}
           </Link>
 
           <div className="space-y-3">

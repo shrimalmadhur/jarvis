@@ -55,7 +55,7 @@ async function getTelegramConfig(): Promise<TelegramConfig | null> {
 /**
  * Send a Telegram message via the Bot API using HTML parse mode.
  */
-async function sendTelegramMessage(
+export async function sendTelegramMessage(
   config: TelegramConfig,
   text: string
 ): Promise<void> {
@@ -96,7 +96,7 @@ function escapeHtml(text: string): string {
  * HTML-escape everything, then apply markdown→HTML conversions,
  * then restore code blocks.
  */
-function markdownToTelegramHtml(text: string): string {
+export function markdownToTelegramHtml(text: string): string {
   // 1. Extract code blocks and inline code into placeholders
   const codeSlots: string[] = [];
   let html = text;
