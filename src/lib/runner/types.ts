@@ -3,10 +3,6 @@ export interface AgentConfig {
   enabled: boolean;
   schedule: string; // cron expression
   timezone?: string;
-  telegram: {
-    botToken: string; // supports ${ENV_VAR} syntax
-    chatId: string; // supports ${ENV_VAR} syntax
-  };
   llm?: {
     provider?: "gemini" | "openai" | "anthropic";
     model?: string;

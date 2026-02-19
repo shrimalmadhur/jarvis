@@ -8,10 +8,6 @@ const AgentConfigSchema = z.object({
   enabled: z.boolean(),
   schedule: z.string(),
   timezone: z.string().optional(),
-  telegram: z.object({
-    botToken: z.string(),
-    chatId: z.string(),
-  }),
   llm: z
     .object({
       provider: z.enum(["gemini", "openai", "anthropic"]).optional(),

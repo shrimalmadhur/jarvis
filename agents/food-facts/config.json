@@ -3,10 +3,6 @@
   "enabled": true,
   "schedule": "0 8 * * *",
   "timezone": "America/Los_Angeles",
-  "telegram": {
-    "botToken": "${FOOD_FACTS_TELEGRAM_BOT_TOKEN}",
-    "chatId": "${FOOD_FACTS_TELEGRAM_CHAT_ID}"
-  },
   "llm": {
     "provider": "gemini",
     "model": "gemini-3-flash-preview",

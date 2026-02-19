@@ -2,7 +2,42 @@ import {
   sendTelegramMessage,
   markdownToTelegramHtml,
 } from "@/lib/notifications/telegram";
+import { db } from "@/lib/db";
+import { notificationConfigs } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import type { RunResult } from "./types";
+
+/**
+ * Look up per-agent Telegram config from the DB.
+ * Returns null if not configured or disabled.
+ */
+export async function getAgentTelegramConfig(
+  agentName: string
+): Promise<{ botToken: string; chatId: string } | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(notificationConfigs)
+      .where(
+        and(
+          eq(notificationConfigs.channel, `telegram-agent:${agentName}`),
+          eq(notificationConfigs.enabled, true)
+        )
+      )
+      .limit(1);
+
+    const config = rows[0];
+    if (config) {
+      const cfg = config.config as Record<string, string>;
+      if (cfg.bot_token && cfg.chat_id) {
+        return { botToken: cfg.bot_token, chatId: cfg.chat_id };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Send an agent's run result to its dedicated Telegram bot.

@@ -9,7 +9,7 @@ if (fs.existsSync(".env.local")) {
 }
 import { loadAgentDefinitions } from "../src/lib/runner/config-loader";
 import { runAgentTask } from "../src/lib/runner/agent-runner";
-import { sendAgentResult } from "../src/lib/runner/telegram-sender";
+import { sendAgentResult, getAgentTelegramConfig } from "../src/lib/runner/telegram-sender";
 import { logRun, getRecentOutputs } from "../src/lib/runner/run-log";
 
 async function main() {
@@ -90,15 +90,17 @@ async function main() {
 
     // Send to Telegram if successful
     if (result.success) {
-      try {
-        await sendAgentResult(
-          def.config.telegram,
-          def.config.name,
-          result
-        );
-        console.log("Sent to Telegram.");
-      } catch (err) {
-        console.error("Failed to send to Telegram:", err);
+      const telegramConfig = await getAgentTelegramConfig(def.config.name);
+
+      if (telegramConfig) {
+        try {
+          await sendAgentResult(telegramConfig, def.config.name, result);
+          console.log("Sent to Telegram.");
+        } catch (err) {
+          console.error("Failed to send to Telegram:", err);
+        }
+      } else {
+        console.log("No Telegram config found, skipping notification.");
       }
     }
   }
