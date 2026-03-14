@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure common Node.js install paths are on PATH (Homebrew on Apple Silicon, etc.)
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Ensure common binary paths are on PATH
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="jarvis"
@@ -30,37 +30,122 @@ fi
 ACTUAL_USER="${SUDO_USER:-$(whoami)}"
 ACTUAL_GROUP="$(id -gn "$ACTUAL_USER")"
 ACTUAL_UID="$(id -u "$ACTUAL_USER")"
+ACTUAL_HOME="$(eval echo ~"$ACTUAL_USER")"
 
-# --- Check prerequisites ---
-echo "Checking prerequisites..."
+# Also check user-local bun install
+export PATH="$ACTUAL_HOME/.bun/bin:$PATH"
+
+# --- Install system prerequisites ---
+echo "Installing system prerequisites..."
+
+if [ "$OS" = "Darwin" ]; then
+    # macOS: ensure Xcode CLI tools and Homebrew are available
+    if ! xcode-select -p &>/dev/null; then
+        echo "  Installing Xcode Command Line Tools..."
+        xcode-select --install 2>/dev/null || true
+        yellow "  Xcode CLI tools install triggered — if a dialog appeared, complete it and re-run this script"
+        exit 1
+    fi
+    green "  Xcode CLI tools installed"
+
+    if ! command -v brew &>/dev/null; then
+        echo "  Installing Homebrew..."
+        sudo -u "$ACTUAL_USER" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
+    fi
+    green "  Homebrew $(brew --version | head -1)"
+
+    for pkg in git curl sqlite3; do
+        if ! command -v "$pkg" &>/dev/null; then
+            echo "  Installing $pkg..."
+            sudo -u "$ACTUAL_USER" brew install "$pkg"
+        fi
+    done
+    green "  System packages OK"
+
+elif [ "$OS" = "Linux" ]; then
+    if command -v apt-get &>/dev/null; then
+        apt-get update -qq
+        apt-get install -y -qq build-essential python3 curl git sqlite3 unzip > /dev/null
+        green "  System packages installed (apt)"
+    elif command -v dnf &>/dev/null; then
+        dnf install -y -q gcc gcc-c++ make python3 curl git sqlite unzip > /dev/null
+        green "  System packages installed (dnf)"
+    elif command -v pacman &>/dev/null; then
+        pacman -Sy --noconfirm --needed base-devel python curl git sqlite unzip > /dev/null
+        green "  System packages installed (pacman)"
+    elif command -v apk &>/dev/null; then
+        apk add --no-cache build-base python3 curl git sqlite unzip > /dev/null
+        green "  System packages installed (apk)"
+    else
+        yellow "  Warning: Unrecognized package manager"
+        yellow "  Please ensure build tools, python3, curl, git, sqlite3, unzip are installed"
+    fi
+else
+    red "Error: Unsupported OS '$OS'. This script supports macOS (Darwin) and Linux."
+    exit 1
+fi
+
+# --- Check / install Bun ---
+echo ""
+echo "Checking Bun..."
+
+if ! command -v bun &>/dev/null; then
+    echo "  Installing Bun..."
+    sudo -u "$ACTUAL_USER" bash -c 'curl -fsSL https://bun.sh/install | bash' 2>&1 | tail -1
+    export PATH="$ACTUAL_HOME/.bun/bin:$PATH"
+    hash -r 2>/dev/null || true
+fi
+
+if ! command -v bun &>/dev/null; then
+    red "Error: Bun installation failed"
+    exit 1
+fi
+
+BUN_BIN="$(command -v bun)"
+BUN_BIN_DIR="$(dirname "$BUN_BIN")"
+green "  bun $(bun --version) ($BUN_BIN_DIR)"
+
+# --- Check / install Node.js (needed by Next.js build workers) ---
+echo ""
+echo "Checking Node.js..."
 
 if ! command -v node &>/dev/null; then
-    red "Error: node is not installed"
-    exit 1
+    if [ "$OS" = "Darwin" ]; then
+        echo "  Installing Node.js via Homebrew..."
+        sudo -u "$ACTUAL_USER" brew install node
+    elif command -v apt-get &>/dev/null; then
+        echo "  Installing Node.js 22 via NodeSource..."
+        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+        apt-get install -y -qq nodejs > /dev/null
+    elif command -v dnf &>/dev/null; then
+        echo "  Installing Node.js 22 via NodeSource..."
+        curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+        dnf install -y -q nodejs > /dev/null
+    else
+        red "Error: Node.js is required for Next.js builds but could not be auto-installed"
+        exit 1
+    fi
+    hash -r 2>/dev/null || true
 fi
 
 NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
 if [ "$NODE_VERSION" -lt 20 ]; then
-    red "Error: Node.js >= 20 required (found v$(node -v))"
-    exit 1
+    yellow "  Node.js $(node -v) is too old (need >= 20), upgrading..."
+    if [ "$OS" = "Darwin" ]; then
+        sudo -u "$ACTUAL_USER" brew upgrade node
+    elif command -v apt-get &>/dev/null; then
+        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+        apt-get install -y -qq nodejs > /dev/null
+    elif command -v dnf &>/dev/null; then
+        curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+        dnf install -y -q nodejs > /dev/null
+    fi
+    hash -r 2>/dev/null || true
 fi
 NODE_BIN_DIR="$(dirname "$(command -v node)")"
 green "  node $(node -v) ($NODE_BIN_DIR)"
-
-if ! command -v pnpm &>/dev/null; then
-    red "Error: pnpm is not installed"
-    exit 1
-fi
-green "  pnpm $(pnpm -v)"
 green "  OS: $OS"
-
-# On Linux, check for build tools needed by better-sqlite3
-if [ "$OS" = "Linux" ]; then
-    if ! command -v make &>/dev/null || ! command -v g++ &>/dev/null; then
-        yellow "  Warning: build-essential not found (needed for better-sqlite3)"
-        yellow "  Install with: sudo apt-get install -y build-essential python3"
-    fi
-fi
 
 # --- Stop existing service to prevent error spam during build ---
 echo ""
@@ -76,12 +161,19 @@ fi
 echo ""
 echo "Installing dependencies..."
 cd "$REPO_DIR"
-sudo -u "$ACTUAL_USER" pnpm install --frozen-lockfile
+sudo -u "$ACTUAL_USER" "$BUN_BIN" install --frozen-lockfile
+
+# Rebuild better-sqlite3 native addon against system Node.js
+# (Next.js build workers run Node.js, not Bun)
+echo ""
+echo "Building native addons..."
+NPM_BIN="$(command -v npm)"
+sudo -u "$ACTUAL_USER" "$NPM_BIN" rebuild better-sqlite3
 
 echo ""
 echo "Building for production..."
 rm -rf "$REPO_DIR/.next"
-sudo -u "$ACTUAL_USER" pnpm build
+sudo -u "$ACTUAL_USER" "$BUN_BIN" run build
 
 # --- Copy static assets into standalone dir ---
 echo ""
@@ -106,7 +198,7 @@ cp -r "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
 # Fix ownership — cp/mkdir ran as root, but the service runs as $ACTUAL_USER
 chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$REPO_DIR/.next"
 
-# --- Deploy to install directory (avoids macOS TCC restrictions on ~/Desktop etc.) ---
+# --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
 rm -rf "$INSTALL_DIR"
@@ -178,15 +270,11 @@ echo ""
 
 if [ "$OS" = "Darwin" ]; then
     # --- macOS: LaunchAgent (user-level) ---
-    # LaunchDaemons can't access user home directories due to macOS privacy restrictions.
-    # LaunchAgents run in the user's session and have full filesystem access.
     echo "Installing launchd agent..."
 
-    # Create log directory
     mkdir -p "$LOG_DIR"
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$LOG_DIR"
 
-    ACTUAL_HOME="$(eval echo ~"$ACTUAL_USER")"
     AGENT_DIR="$ACTUAL_HOME/Library/LaunchAgents"
     PLIST_PATH="$AGENT_DIR/$PLIST_LABEL.plist"
 
@@ -197,12 +285,10 @@ if [ "$OS" = "Darwin" ]; then
     launchctl bootout system/"$PLIST_LABEL" 2>/dev/null || true
     rm -f "/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 
-    # Generate plist with actual paths
     sed -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
         "$REPO_DIR/jarvis.plist" > "$PLIST_PATH"
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$PLIST_PATH"
 
-    # Unload if already loaded, then load
     launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
     launchctl bootstrap gui/"$ACTUAL_UID" "$PLIST_PATH"
 
@@ -229,7 +315,6 @@ else
     # --- Linux: systemd ---
     echo "Installing systemd service..."
 
-    # Generate service file with actual paths and user
     sed -e "s|__USER__|$ACTUAL_USER|g" \
         -e "s|__GROUP__|$ACTUAL_GROUP|g" \
         -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
@@ -262,3 +347,16 @@ else
         red "  sudo journalctl -u jarvis -n 50"
     fi
 fi
+
+# --- Apply database schema ---
+echo ""
+echo "Applying database schema..."
+cd "$REPO_DIR"
+# Apply schema to the installed database (production)
+DATABASE_PATH="$INSTALL_DIR/data/jarvis.db" sudo -u "$ACTUAL_USER" "$BUN_BIN" run drizzle-kit push 2>&1 | tail -1
+green "  Database schema applied"
+
+# --- Install agent cron jobs ---
+echo ""
+echo "Installing agent cron jobs..."
+sudo -u "$ACTUAL_USER" bash "$REPO_DIR/scripts/install-cron.sh"

@@ -26,35 +26,20 @@ echo ""
 # ── 1. System packages ─────────────────────────
 echo "Step 1: Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq build-essential python3 curl git sqlite3 > /dev/null
+sudo apt-get install -y -qq curl git sqlite3 unzip > /dev/null
 green "  System packages installed"
 
-# ── 2. Node.js 22 via NodeSource ────────────────
-if command -v node &>/dev/null; then
-    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-    if [ "$NODE_VERSION" -ge 20 ]; then
-        green "  Node.js $(node -v) already installed"
-    else
-        yellow "  Node.js $(node -v) is too old, installing v22..."
-        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-        sudo apt-get install -y -qq nodejs > /dev/null
-        green "  Node.js $(node -v) installed"
-    fi
+# ── 2. Bun runtime ─────────────────────────────
+if command -v bun &>/dev/null; then
+    green "  Bun $(bun --version) already installed"
 else
-    echo "  Installing Node.js 22..."
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-    sudo apt-get install -y -qq nodejs > /dev/null
-    green "  Node.js $(node -v) installed"
+    echo "  Installing Bun..."
+    curl -fsSL https://bun.sh/install | bash
+    export PATH="$HOME/.bun/bin:$PATH"
+    green "  Bun $(bun --version) installed"
 fi
 
-# ── 3. pnpm ─────────────────────────────────────
-if ! command -v pnpm &>/dev/null; then
-    echo "  Installing pnpm..."
-    npm install -g pnpm > /dev/null 2>&1
-fi
-green "  pnpm $(pnpm -v)"
-
-# ── 4. Pull latest (if upgrade) ────────────────
+# ── 3. Pull latest (if upgrade) ────────────────
 if $UPGRADE; then
     echo ""
     echo "Step 2: Pulling latest code..."
@@ -63,19 +48,19 @@ if $UPGRADE; then
     green "  Code updated"
 fi
 
-# ── 5. Install deps + build ────────────────────
+# ── 4. Install deps + build ────────────────────
 echo ""
 echo "Step $($UPGRADE && echo 3 || echo 2): Installing dependencies..."
 cd "$REPO_DIR"
-pnpm install --frozen-lockfile
+bun install --frozen-lockfile
 green "  Dependencies installed"
 
 echo ""
 echo "Step $($UPGRADE && echo 4 || echo 3): Building..."
-pnpm build
+bun run build
 green "  Build complete"
 
-# ── 6. Create directories ──────────────────────
+# ── 5. Create directories ──────────────────────
 echo ""
 echo "Step $($UPGRADE && echo 5 || echo 4): Setting up directories..."
 mkdir -p "$REPO_DIR/data"
@@ -83,13 +68,13 @@ sudo mkdir -p /var/log/jarvis
 sudo chown "$(whoami)" /var/log/jarvis
 green "  Directories ready"
 
-# ── 7. Push SQLite schema ──────────────────────
+# ── 6. Push SQLite schema ──────────────────────
 echo ""
 echo "Step $($UPGRADE && echo 6 || echo 5): Applying database schema..."
-pnpm drizzle-kit push 2>&1 | tail -1
+bun run drizzle-kit push 2>&1 | tail -1
 green "  Database schema applied"
 
-# ── 8. Environment file ────────────────────────
+# ── 7. Environment file ────────────────────────
 echo ""
 ENV_FILE="/etc/jarvis/env"
 if [ ! -f "$ENV_FILE" ]; then
@@ -123,7 +108,7 @@ else
     green "  $ENV_FILE already exists"
 fi
 
-# ── 9. Systemd service (web UI) ────────────────
+# ── 8. Systemd service (web UI) ────────────────
 echo ""
 echo "Step $($UPGRADE && echo 8 || echo 7): Installing systemd service..."
 INSTALL_DIR="/usr/local/lib/jarvis"
@@ -145,12 +130,6 @@ sudo cp -r "$REPO_DIR/.next/static" "$INSTALL_DIR/.next/static"
 
 # SQLite data directory
 sudo mkdir -p "$INSTALL_DIR/data"
-
-# Native addon
-if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
-    sudo mkdir -p "$INSTALL_DIR/node_modules"
-    sudo cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
-fi
 
 # Runner dependencies: agents, source, scripts, configs
 [ -d "$REPO_DIR/agents" ] && sudo cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
@@ -184,7 +163,7 @@ else
     red "  Service failed to start. Check: sudo journalctl -u jarvis -n 30"
 fi
 
-# ── 10. Cron jobs for agents ───────────────────
+# ── 9. Cron jobs for agents ───────────────────
 echo ""
 echo "Step $($UPGRADE && echo 9 || echo 8): Installing cron jobs..."
 bash "$REPO_DIR/scripts/install-cron.sh"
@@ -213,6 +192,6 @@ echo "  sudo systemctl status jarvis          # Web UI status"
 echo "  sudo journalctl -u jarvis -f          # Web UI logs"
 echo "  tail -f /var/log/jarvis/agents.log    # Agent cron logs"
 echo "  crontab -l                            # View scheduled agents"
-echo "  npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts --list   # List agents"
-echo "  npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts food-facts  # Test run"
+echo "  bun run scripts/run-agents.ts --list     # List agents"
+echo "  bun run scripts/run-agents.ts food-facts  # Test run"
 echo ""

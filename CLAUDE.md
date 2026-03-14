@@ -6,8 +6,8 @@ Uses MCP (Model Context Protocol) for external service integrations and supports
 ## Quick Start
 
 ```bash
-pnpm dev          # Start dev server (Next.js 16 + Turbopack)
-npx tsc --noEmit  # Type check
+bun run dev          # Start dev server (Next.js 16 + Turbopack)
+bun run tsc --noEmit # Type check
 ```
 
 ## Tech Stack
@@ -17,7 +17,7 @@ npx tsc --noEmit  # Type check
 - **Database**: SQLite via `better-sqlite3` + `drizzle-orm` (local file at `data/jarvis.db`)
 - **LLM Providers**: Gemini (default: `gemini-3-flash-preview`), OpenAI, Anthropic
 - **Tools**: MCP servers (STDIO transport) + built-in filesystem/time tools
-- **Package Manager**: pnpm
+- **Runtime**: Bun (package manager, script runner, production server)
 
 ## Architecture
 
@@ -99,7 +99,7 @@ src/
     chat/                             # ChatInput, ChatMessage, ChatMessagesList
     layout/sidebar.tsx                # Navigation sidebar
 scripts/
-    run-agents.ts                     # CLI: tsx scripts/run-agents.ts [agent-name]
+    run-agents.ts                     # CLI: bun run scripts/run-agents.ts [agent-name]
     install-cron.sh                   # Generate crontab entries from agent configs
 data/
     jarvis.db                         # SQLite database (gitignored)
@@ -113,7 +113,7 @@ SQLite via `better-sqlite3`. Schema defined in `src/lib/db/schema.ts`. DB file a
 
 Schema changes:
 ```bash
-pnpm drizzle-kit push   # Apply schema to local SQLite
+bun run drizzle-kit push   # Apply schema to local SQLite
 ```
 
 ## Agent Runner
@@ -121,9 +121,9 @@ pnpm drizzle-kit push   # Apply schema to local SQLite
 Autonomous agents run on a cron schedule via `scripts/run-agents.ts`:
 
 ```bash
-pnpm run-agents              # Run all enabled agents
-pnpm run-agents food-facts   # Run specific agent
-pnpm run-agents --list       # List configured agents
+bun run run-agents              # Run all enabled agents
+bun run run-agents food-facts   # Run specific agent
+bun run run-agents --list       # List configured agents
 ```
 
 Each agent lives in `agents/{name}/` with:
@@ -135,6 +135,7 @@ Telegram secrets use `${ENV_VAR}` syntax in config.json, resolved at runtime.
 
 ## Key Design Decisions
 
+- **Bun runtime**: Bun is used as the package manager, script runner, and production server. `better-sqlite3` is kept (instead of `bun:sqlite`) because Next.js build workers run Node.js internally and can't load Bun-only built-in modules.
 - **Built-in tools are a temporary workaround**: `list_directory`, `read_file`, `write_file`, `get_file_info` in `src/lib/agent/builtin-tools.ts` exist only because `npx` can't download the filesystem MCP server on this network. Once the network issue is resolved (or the MCP server package is pre-installed), remove all built-in tools and replace them with the `@modelcontextprotocol/server-filesystem` MCP server. The only built-in tool that should remain is `get_current_time`.
 - **MCP failure cache**: Failed MCP server connections are cached for 5 minutes to avoid blocking every request with a 120s timeout.
 - **Provider parts preservation**: Gemini 3+ models require "thought signatures" on function call parts. Raw Gemini response parts are stored in `_providerParts` on `LLMMessage` and persisted via `provider_data` JSON column. The Gemini provider replays these verbatim to avoid thought signature errors.

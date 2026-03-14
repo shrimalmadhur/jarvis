@@ -64,7 +64,7 @@ for agent_dir in "$AGENTS_DIR"/*/; do
     ENV_SOURCE="set -a && source $ENV_FILE && set +a && "
   fi
 
-  entry="$schedule ${ENV_SOURCE}cd $PROJECT_DIR && npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts $agent_name >> $LOG_DIR/agents.log 2>&1"
+  entry="$schedule ${ENV_SOURCE}cd $PROJECT_DIR && bun run --tsconfig tsconfig.runner.json scripts/run-agents.ts $agent_name >> $LOG_DIR/agents.log 2>&1"
   CRON_ENTRIES="$CRON_ENTRIES\n# Agent: $agent_name\n$entry"
   echo "Added: $agent_name [$schedule]"
 done

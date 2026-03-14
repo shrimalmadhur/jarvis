@@ -11,7 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "run-agents": "tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts"
+    "run-agents": "bun run --tsconfig tsconfig.runner.json scripts/run-agents.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
@@ -37,6 +37,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "latest",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -45,7 +46,9 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "tailwindcss": "^4",
-    "tsx": "^4.21.0",
     "typescript": "^5"
-  }
+  },
+  "workspaces": [
+    "."
+  ]
 }
