@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure common Node.js install paths are on PATH (Homebrew on Apple Silicon, etc.)
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Ensure Bun is on PATH
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="jarvis"
@@ -27,13 +27,13 @@ git pull
 # --- Install dependencies ---
 echo ""
 echo "Installing dependencies..."
-pnpm install --frozen-lockfile
+bun install --frozen-lockfile
 
 # --- Build ---
 echo ""
 echo "Building for production..."
 rm -rf "$REPO_DIR/.next" 2>/dev/null || sudo rm -rf "$REPO_DIR/.next"
-pnpm build
+bun run build
 
 # --- Copy static assets into standalone dir ---
 echo ""

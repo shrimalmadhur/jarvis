@@ -7,10 +7,10 @@ upgrade:
 	bash scripts/upgrade.sh
 
 dev:
-	pnpm dev
+	bun run dev
 
 build:
-	pnpm build
+	bun run build
 
 typecheck:
-	npx tsc --noEmit
+	bun run tsc --noEmit
