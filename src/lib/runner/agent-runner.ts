@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
+import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 
 /**
  * Build the user message from skill + context.
@@ -83,7 +84,7 @@ export async function runAgentTask(
   const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
   return new Promise<RunResult>((resolve) => {
-    const proc: ChildProcess = spawn("claude", args, {
+    const proc: ChildProcess = spawn(resolveClaudePath(), args, {
       env: childEnv,
     });
 
