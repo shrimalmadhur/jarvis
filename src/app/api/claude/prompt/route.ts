@@ -1,6 +1,38 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, execSync, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+let _cachedClaudePath: string | null = null;
+function resolveClaudePath(): string {
+  if (_cachedClaudePath) return _cachedClaudePath;
+
+  // Try common locations for claude CLI (systemd services have limited PATH)
+  const candidates = [
+    join(homedir(), ".local", "bin", "claude"),
+    "/usr/local/bin/claude",
+    "/usr/bin/claude",
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      _cachedClaudePath = candidate;
+      return candidate;
+    }
+  }
+
+  // Fall back to `which` to find it
+  try {
+    const resolved = execSync("which claude", { encoding: "utf-8" }).trim();
+    _cachedClaudePath = resolved;
+    return resolved;
+  } catch {
+    // Fall back to bare name and let spawn handle the error
+    return "claude";
+  }
+}
 let activeProcesses = 0;
 const MAX_CONCURRENT = 3;
 
@@ -72,9 +104,23 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     start(controller) {
       activeProcesses++;
+      let cleaned = false;
       const encoder = new TextEncoder();
 
-      proc = spawn("claude", args, {
+      const safeEnqueue = (data: Uint8Array) => {
+        if (!cleaned) controller.enqueue(data);
+      };
+
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        if (timeout) clearTimeout(timeout);
+        activeProcesses--;
+        controller.close();
+      };
+
+      const claudePath = resolveClaudePath();
+      proc = spawn(claudePath, args, {
         env: { ...process.env, FORCE_COLOR: "0" },
       });
 
@@ -106,20 +152,20 @@ export async function POST(request: Request) {
               if (msg.content && Array.isArray(msg.content)) {
                 for (const block of msg.content) {
                   if (block.type === "text" && block.text) {
-                    controller.enqueue(
+                    safeEnqueue(
                       encoder.encode(`data: ${JSON.stringify({ type: "text", text: block.text })}\n\n`)
                     );
                   }
                 }
               } else if (typeof msg.content === "string" && msg.content) {
-                controller.enqueue(
+                safeEnqueue(
                   encoder.encode(`data: ${JSON.stringify({ type: "text", text: msg.content })}\n\n`)
                 );
               }
             }
 
             if (event.type === "result" && event.result) {
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode(`data: ${JSON.stringify({ type: "result", text: event.result })}\n\n`)
               );
             }
@@ -134,21 +180,17 @@ export async function POST(request: Request) {
       });
 
       proc.on("close", (code: number | null) => {
-        if (timeout) clearTimeout(timeout);
-        activeProcesses--;
-        controller.enqueue(
+        safeEnqueue(
           encoder.encode(`data: ${JSON.stringify({ type: "done", code })}\n\n`)
         );
-        controller.close();
+        cleanup();
       });
 
       proc.on("error", (err: Error) => {
-        if (timeout) clearTimeout(timeout);
-        activeProcesses--;
-        controller.enqueue(
+        safeEnqueue(
           encoder.encode(`data: ${JSON.stringify({ type: "error", text: err.message })}\n\n`)
         );
-        controller.close();
+        cleanup();
       });
     },
     cancel() {
