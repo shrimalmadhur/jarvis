@@ -22,6 +22,7 @@ import {
   X,
   Key,
   Wrench,
+  Play,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { AgentForm } from "@/components/agents/agent-form";
@@ -501,6 +502,7 @@ export default function AgentDetailPage() {
   const [editMode, setEditMode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [running, setRunning] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -569,6 +571,26 @@ export default function AgentDetailPage() {
       setError("Failed to delete agent");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agents/${params.agentId}/run`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || "Agent run failed");
+      }
+      // Refresh data to show the new run in history
+      await fetchData();
+    } catch {
+      setError("Failed to run agent");
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -674,6 +696,19 @@ export default function AgentDetailPage() {
                     <span className={cn("h-1.5 w-1.5 rounded-full", agent.enabled ? "bg-green status-dot-live" : "bg-muted")} />
                     {agent.enabled ? "Active" : "Paused"}
                   </span>
+                  <button
+                    onClick={handleRunNow}
+                    disabled={running}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-[13px] font-medium text-accent transition-colors hover:bg-accent/20 hover:border-accent/40 disabled:opacity-50"
+                    title="Run Now"
+                  >
+                    {running ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    {running ? "Running..." : "Run Now"}
+                  </button>
                   <button onClick={() => setEditMode(true)} className="rounded-xl border border-border p-2.5 text-muted-foreground transition-colors hover:text-foreground hover:border-border-hover" title="Edit">
                     <Pencil className="h-4 w-4" />
                   </button>
