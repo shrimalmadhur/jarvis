@@ -178,6 +178,17 @@ Telegram notifications are configured per-agent via the UI. Config stored in `no
 - **Agent runner is stateless**: Each cron run is independent. Recent run outputs are queried from `agent_runs` table to inject context (e.g., topic dedup).
 - **Projects → Agents hierarchy**: Agents are organized into projects (DB-backed). All agent CRUD is done via UI/API. The `agents/` filesystem directory is legacy — DB agents take precedence when both exist with the same name.
 
+## Deployment
+
+Jarvis is deployed as a system service via `make install` (first time) and `make upgrade` (updates).
+
+- **Install dir**: `/usr/local/lib/jarvis/`
+- **Production DB**: `/usr/local/lib/jarvis/data/jarvis.db` (preserved across upgrades)
+- **Env config**: `/etc/jarvis/env`
+- **Service**: systemd (`jarvis`) on Linux, launchd (`com.jarvis.agent`) on macOS
+
+When debugging data issues, always query the **installation DB** (`/usr/local/lib/jarvis/data/jarvis.db`), not the repo-local `data/jarvis.db`.
+
 ## Environment Variables
 
 ```
