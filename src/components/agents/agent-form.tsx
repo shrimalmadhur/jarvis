@@ -282,7 +282,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
       <div className="flex-1 min-w-0 px-6 pb-6 pt-2 overflow-y-auto">
         {formContent}
       </div>
-      <div className="w-[380px] shrink-0 border-l border-border">
+      <div className="w-[520px] shrink-0 border-l border-border">
         <ClaudePanel
           soul={form.soul}
           skill={form.skill}

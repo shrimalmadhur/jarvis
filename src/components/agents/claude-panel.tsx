@@ -53,7 +53,7 @@ function MessageBubble({
     >
       <div
         className={cn(
-          "max-w-[85%] rounded-xl px-3 py-2 text-[13px] leading-relaxed",
+          "max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed",
           msg.role === "user"
             ? "bg-accent/15 text-foreground"
             : "bg-surface-raised border border-border/50 text-muted-foreground"
@@ -135,6 +135,15 @@ export function ClaudePanel({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    }
+  }, [input]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -376,8 +385,8 @@ export function ClaudePanel({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Claude to help..."
-            rows={1}
-            className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted outline-none transition-colors focus:border-accent/50"
+            rows={3}
+            className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted outline-none transition-colors focus:border-accent/50"
             disabled={streaming}
           />
           {streaming ? (
