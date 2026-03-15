@@ -1,38 +1,7 @@
-import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { spawn, type ChildProcess } from "node:child_process";
+import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-let _cachedClaudePath: string | null = null;
-function resolveClaudePath(): string {
-  if (_cachedClaudePath) return _cachedClaudePath;
-
-  // Try common locations for claude CLI (systemd services have limited PATH)
-  const candidates = [
-    join(homedir(), ".local", "bin", "claude"),
-    "/usr/local/bin/claude",
-    "/usr/bin/claude",
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      _cachedClaudePath = candidate;
-      return candidate;
-    }
-  }
-
-  // Fall back to `which` to find it
-  try {
-    const resolved = execSync("which claude", { encoding: "utf-8" }).trim();
-    _cachedClaudePath = resolved;
-    return resolved;
-  } catch {
-    // Fall back to bare name and let spawn handle the error
-    return "claude";
-  }
-}
 let activeProcesses = 0;
 const MAX_CONCURRENT = 3;
 
