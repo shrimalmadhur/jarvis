@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Sparkles, Plus, Trash2, Eye, EyeOff } from "lucide-react";
 import { cronToHuman } from "@/lib/utils/cron";
 import { ClaudePanel } from "./claude-panel";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 export interface AgentFormData {
   name: string;
@@ -183,11 +184,11 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
       {/* Soul */}
       <div>
         <label className={labelClasses}>system prompt // soul</label>
-        <textarea
+        <MarkdownEditor
           value={form.soul}
-          onChange={(e) => update("soul", e.target.value)}
+          onChange={(v) => update("soul", v)}
           placeholder="You are an autonomous agent that..."
-          className={`${inputClasses} min-h-[140px] text-[13px] resize-y`}
+          inputClassName={inputClasses}
           required
         />
       </div>
@@ -195,11 +196,11 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
       {/* Skill */}
       <div>
         <label className={labelClasses}>task instructions // skill</label>
-        <textarea
+        <MarkdownEditor
           value={form.skill}
-          onChange={(e) => update("skill", e.target.value)}
+          onChange={(v) => update("skill", v)}
           placeholder="Generate a daily report about..."
-          className={`${inputClasses} min-h-[140px] text-[13px] resize-y`}
+          inputClassName={inputClasses}
           required
         />
       </div>

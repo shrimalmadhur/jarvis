@@ -27,6 +27,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { AgentForm } from "@/components/agents/agent-form";
 import type { AgentFormData } from "@/components/agents/agent-form";
 import { cronToHuman } from "@/lib/utils/cron";
+import { MarkdownView } from "@/components/ui/markdown-view";
 
 interface AgentDetail {
   id: string;
@@ -715,11 +716,11 @@ export default function AgentDetailPage() {
         {/* Two-column layout for Soul/Skill + Telegram */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CollapsibleSection title="Personality (Soul)" icon={Bot} iconColor="text-accent">
-            <pre className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-muted-foreground">{agent.soul}</pre>
+            <MarkdownView content={agent.soul} />
           </CollapsibleSection>
 
           <CollapsibleSection title="Task (Skill)" icon={FileText} iconColor="text-accent">
-            <pre className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-muted-foreground">{agent.skill}</pre>
+            <MarkdownView content={agent.skill} />
           </CollapsibleSection>
         </div>
 

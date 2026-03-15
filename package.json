@@ -30,6 +30,8 @@
     "openai": "^6.17.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
     "undici": "^7.19.2",
     "zod": "^4.3.5"
