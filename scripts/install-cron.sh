@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Generate and install crontab entries for Jarvis agents.
+# Generate and install crontab entries for Jarvis agents (from DB).
 # Usage: bash scripts/install-cron.sh [--dry-run]
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-AGENTS_DIR="$PROJECT_DIR/agents"
 ENV_FILE="/etc/jarvis/env"
 LOG_DIR="/var/log/jarvis"
 DRY_RUN=false
@@ -15,14 +14,25 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
 fi
 
-if [[ ! -d "$AGENTS_DIR" ]]; then
-  echo "No agents directory found at $AGENTS_DIR"
-  exit 1
-fi
-
 # Ensure log directory exists
 if ! $DRY_RUN; then
   mkdir -p "$LOG_DIR" 2>/dev/null || true
+fi
+
+# Query enabled agents from DB using bun
+AGENTS_JSON=$(cd "$PROJECT_DIR" && bun -e "
+  const Database = require('better-sqlite3');
+  const path = require('path');
+  const dbPath = process.env.DATABASE_PATH || path.join('data', 'jarvis.db');
+  const db = new Database(dbPath, { readonly: true });
+  const rows = db.prepare('SELECT name, schedule FROM agents WHERE enabled = 1 AND schedule IS NOT NULL').all();
+  console.log(JSON.stringify(rows));
+  db.close();
+" 2>/dev/null)
+
+if [[ -z "$AGENTS_JSON" || "$AGENTS_JSON" == "[]" ]]; then
+  echo "No enabled agents with schedules found in database."
+  exit 0
 fi
 
 # Collect cron entries
@@ -30,28 +40,12 @@ CRON_ENTRIES=""
 MARKER_START="# --- Jarvis Agents (auto-generated) ---"
 MARKER_END="# --- End Jarvis Agents ---"
 
-for agent_dir in "$AGENTS_DIR"/*/; do
-  agent_name=$(basename "$agent_dir")
+# Parse JSON array of {name, schedule} objects
+COUNT=$(echo "$AGENTS_JSON" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
 
-  # Skip _prefixed directories
-  [[ "$agent_name" == _* ]] && continue
-
-  config_file="$agent_dir/config.json"
-  [[ ! -f "$config_file" ]] && continue
-
-  # Extract schedule and enabled status using python3 or node
-  if command -v python3 &>/dev/null; then
-    enabled=$(python3 -c "import json; print(json.load(open('$config_file'))['enabled'])" 2>/dev/null || echo "false")
-    schedule=$(python3 -c "import json; print(json.load(open('$config_file'))['schedule'])" 2>/dev/null || echo "")
-  else
-    enabled=$(node -e "console.log(require('$config_file').enabled)" 2>/dev/null || echo "false")
-    schedule=$(node -e "console.log(require('$config_file').schedule)" 2>/dev/null || echo "")
-  fi
-
-  if [[ "$enabled" != "True" && "$enabled" != "true" ]]; then
-    echo "Skipping $agent_name (disabled)"
-    continue
-  fi
+for i in $(seq 0 $((COUNT - 1))); do
+  agent_name=$(echo "$AGENTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[$i]['name'])")
+  schedule=$(echo "$AGENTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[$i]['schedule'])")
 
   if [[ -z "$schedule" ]]; then
     echo "Skipping $agent_name (no schedule)"

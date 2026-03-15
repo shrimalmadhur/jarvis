@@ -3,11 +3,9 @@ import { db } from "@/lib/db";
 import { projects, agents } from "@/lib/db/schema";
 import { eq, count, desc, sql } from "drizzle-orm";
 import { createProjectSchema } from "@/lib/validations/project";
-import { autoMigrateFilesystemAgents } from "@/lib/db/auto-migrate";
 
 export async function GET() {
   try {
-    await autoMigrateFilesystemAgents();
     const rows = await db
       .select({
         id: projects.id,

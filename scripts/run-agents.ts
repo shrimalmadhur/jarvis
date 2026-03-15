@@ -7,17 +7,12 @@ if (fs.existsSync(".env.local")) {
 } else if (fs.existsSync("/etc/jarvis/env")) {
   dotenv.config({ path: "/etc/jarvis/env" });
 }
-import { loadAgentDefinitions } from "../src/lib/runner/config-loader";
 import { loadAgentDefinitionsFromDB } from "../src/lib/runner/db-config-loader";
 import { runAgentTask } from "../src/lib/runner/agent-runner";
 import { sendAgentResult, getAgentTelegramConfig } from "../src/lib/runner/telegram-sender";
 import { logRun, getRecentOutputs } from "../src/lib/runner/run-log";
-import type { AgentDefinition } from "../src/lib/runner/types";
-import { autoMigrateFilesystemAgents } from "../src/lib/db/auto-migrate";
 
 async function main() {
-  await autoMigrateFilesystemAgents();
-
   const args = process.argv.slice(2);
 
   // Parse --project flag
@@ -28,25 +23,10 @@ async function main() {
     args.splice(projectIdx, 2);
   }
 
-  // Load from both sources
-  const fsDefinitions = await loadAgentDefinitions();
-  const dbDefinitions = await loadAgentDefinitionsFromDB({
+  // Load agents from DB
+  const definitions = await loadAgentDefinitionsFromDB({
     projectName: projectName || undefined,
   });
-
-  // Merge: DB agents take precedence, skip FS agents with same name
-  const dbNames = new Set(dbDefinitions.map((d) => d.config.name));
-  const skippedFs = fsDefinitions.filter((d) => dbNames.has(d.config.name));
-  if (skippedFs.length > 0) {
-    console.log(`[jarvis] Skipping ${skippedFs.length} filesystem agent(s) that exist in DB: ${skippedFs.map((d) => d.config.name).join(", ")}`);
-  }
-  const deduped: AgentDefinition[] = [
-    ...dbDefinitions,
-    ...fsDefinitions.filter((d) => !dbNames.has(d.config.name)),
-  ];
-
-  // If --project was set but no DB agents found, skip FS agents entirely
-  const definitions = projectName ? dbDefinitions : deduped;
 
   // --list: show configured agents
   if (args.includes("--list")) {
@@ -58,9 +38,8 @@ async function main() {
     for (const def of definitions) {
       const schedule = def.config.schedule;
       const envCount = Object.keys(def.config.envVars || {}).length;
-      const source = def.agentId ? "db" : "fs";
       console.log(
-        `  ${def.config.name} [${schedule}] ${envCount} env vars (${source})`
+        `  ${def.config.name} [${schedule}] ${envCount} env vars`
       );
     }
     return;
