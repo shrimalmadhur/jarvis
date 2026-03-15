@@ -19,6 +19,14 @@ INSTALL_DIR="/usr/local/lib/jarvis"
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 
+# --- Check prerequisites ---
+for cmd in rsync sqlite3; do
+    if ! command -v "$cmd" &>/dev/null; then
+        red "Error: '$cmd' is required but not installed"
+        exit 1
+    fi
+done
+
 # --- Pull latest code ---
 echo "Pulling latest code..."
 cd "$REPO_DIR"
@@ -63,7 +71,7 @@ echo ""
 echo "Stopping $SERVICE_NAME..."
 if [ "$OS" = "Darwin" ]; then
     ACTUAL_UID="$(id -u)"
-    launchctl kill SIGTERM gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
+    launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
     sleep 1
 else
     sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
@@ -72,25 +80,42 @@ fi
 # --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
-# Remove everything except data/ (preserves the SQLite database)
-find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
-cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
+
+# Backup database before deploying (service is already stopped above)
+if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
+    BACKUP="$INSTALL_DIR/data/jarvis.db.bak.$(date +%s)"
+    sqlite3 "$INSTALL_DIR/data/jarvis.db" ".backup '$BACKUP'"
+    chmod 600 "$BACKUP"
+    green "  Database backed up to $BACKUP"
+    # Keep only the 3 most recent backups
+    ls -t "$INSTALL_DIR/data/jarvis.db.bak."* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+fi
+
+# Deploy: rsync first (so files exist if it fails), then clean stale files
+if [ -d "$INSTALL_DIR" ]; then
+    find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
+else
+    mkdir -p "$INSTALL_DIR"
+fi
+# Copy standalone build but exclude data/ to preserve the production database
+rsync -a --exclude='/data' "$STANDALONE_DIR/" "$INSTALL_DIR/"
 sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
 
 # Copy better-sqlite3 native addon (not included in standalone bundle)
 if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
-    mkdir -p "$INSTALL_DIR/node_modules"
-    cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+    mkdir -p "$INSTALL_DIR/node_modules/better-sqlite3"
+    rsync -a "$REPO_DIR/node_modules/better-sqlite3/" "$INSTALL_DIR/node_modules/better-sqlite3/"
 fi
 
 # Copy drizzle migrations, agents, runner scripts, and configs
-cp -R "$REPO_DIR/drizzle" "$INSTALL_DIR/drizzle"
+# Use rsync to merge into existing dirs (cp -R creates nested duplicates)
+rsync -a "$REPO_DIR/drizzle/" "$INSTALL_DIR/drizzle/"
 if [ -d "$REPO_DIR/agents" ]; then
-    cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
+    rsync -a "$REPO_DIR/agents/" "$INSTALL_DIR/agents/"
 fi
-cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
-cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
+rsync -a "$REPO_DIR/src/" "$INSTALL_DIR/src/"
+rsync -a "$REPO_DIR/scripts/" "$INSTALL_DIR/scripts/"
 cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
@@ -104,7 +129,11 @@ echo "Restarting $SERVICE_NAME..."
 
 if [ "$OS" = "Darwin" ]; then
     ACTUAL_UID="$(id -u)"
-    launchctl kickstart -k gui/"$ACTUAL_UID"/"$PLIST_LABEL"
+    ACTUAL_HOME="$(eval echo ~"$(whoami)")"
+    PLIST_PATH="$ACTUAL_HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
+    # Re-bootstrap the service (was booted out before deploy)
+    launchctl bootstrap gui/"$ACTUAL_UID" "$PLIST_PATH" 2>/dev/null || true
+    launchctl kickstart -k gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
 
     sleep 2
     if launchctl print gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then

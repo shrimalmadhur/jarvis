@@ -26,7 +26,7 @@ echo ""
 # ── 1. System packages ─────────────────────────
 echo "Step 1: Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq curl git sqlite3 unzip > /dev/null
+sudo apt-get install -y -qq curl git sqlite3 rsync unzip > /dev/null
 green "  System packages installed"
 
 # ── 2. Bun runtime ─────────────────────────────
@@ -114,15 +114,27 @@ INSTALL_DIR="/usr/local/lib/jarvis"
 STANDALONE_DIR="$REPO_DIR/.next/standalone"
 NODE_BIN_DIR="$(dirname "$(command -v node)")"
 
+# Stop existing service before deploy (if running)
+sudo systemctl stop jarvis 2>/dev/null || true
+
 if [ -d "$INSTALL_DIR" ]; then
+    # Backup database before re-install/upgrade (service is stopped above)
+    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
+        BACKUP="$INSTALL_DIR/data/jarvis.db.bak.$(date +%s)"
+        sqlite3 "$INSTALL_DIR/data/jarvis.db" ".backup '$BACKUP'"
+        sudo chmod 600 "$BACKUP"
+        green "  Database backed up to $BACKUP"
+        # Keep only the 3 most recent backups
+        ls -t "$INSTALL_DIR/data/jarvis.db.bak."* 2>/dev/null | tail -n +4 | sudo xargs rm -f 2>/dev/null
+    fi
     # Preserve data/ (SQLite database) on re-install/upgrade
     sudo find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
 else
     sudo mkdir -p "$INSTALL_DIR"
 fi
 
-# Copy standalone build
-sudo cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
+# Copy standalone build but exclude data/ to preserve any existing database
+sudo rsync -a --exclude='/data' "$STANDALONE_DIR/" "$INSTALL_DIR/"
 
 # Static assets
 if [ -d "$REPO_DIR/public" ]; then
@@ -136,15 +148,16 @@ sudo mkdir -p "$INSTALL_DIR/data"
 
 # Copy better-sqlite3 native addon (not included in standalone bundle)
 if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
-    sudo mkdir -p "$INSTALL_DIR/node_modules"
-    sudo cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+    sudo mkdir -p "$INSTALL_DIR/node_modules/better-sqlite3"
+    sudo rsync -a "$REPO_DIR/node_modules/better-sqlite3/" "$INSTALL_DIR/node_modules/better-sqlite3/"
 fi
 
 # Runner dependencies: agents, source, scripts, configs
-[ -d "$REPO_DIR/agents" ] && sudo cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
-sudo cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
-sudo cp -R "$REPO_DIR/drizzle" "$INSTALL_DIR/drizzle"
-sudo cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
+# Use rsync to merge into existing dirs (cp -R creates nested duplicates)
+[ -d "$REPO_DIR/agents" ] && sudo rsync -a "$REPO_DIR/agents/" "$INSTALL_DIR/agents/"
+sudo rsync -a "$REPO_DIR/src/" "$INSTALL_DIR/src/"
+sudo rsync -a "$REPO_DIR/drizzle/" "$INSTALL_DIR/drizzle/"
+sudo rsync -a "$REPO_DIR/scripts/" "$INSTALL_DIR/scripts/"
 sudo cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 sudo cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 sudo cp "$REPO_DIR/package.json" "$INSTALL_DIR/"

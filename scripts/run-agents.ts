@@ -1,11 +1,13 @@
 import dotenv from "dotenv";
 import fs from "node:fs";
 
-// Load env: prefer .env.local (dev), fall back to /etc/jarvis/env (server)
+// Load env: prefer .env.local (dev), then /etc/jarvis/env (server), then .env
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
 } else if (fs.existsSync("/etc/jarvis/env")) {
   dotenv.config({ path: "/etc/jarvis/env" });
+} else if (fs.existsSync(".env")) {
+  dotenv.config({ path: ".env" });
 }
 import { loadAgentDefinitionsFromDB } from "../src/lib/runner/db-config-loader";
 import { runAgentTask } from "../src/lib/runner/agent-runner";

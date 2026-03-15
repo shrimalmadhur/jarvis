@@ -66,20 +66,20 @@ if [ "$OS" = "Darwin" ]; then
 elif [ "$OS" = "Linux" ]; then
     if command -v apt-get &>/dev/null; then
         apt-get update -qq
-        apt-get install -y -qq build-essential python3 curl git sqlite3 unzip > /dev/null
+        apt-get install -y -qq build-essential python3 curl git sqlite3 rsync unzip > /dev/null
         green "  System packages installed (apt)"
     elif command -v dnf &>/dev/null; then
-        dnf install -y -q gcc gcc-c++ make python3 curl git sqlite unzip > /dev/null
+        dnf install -y -q gcc gcc-c++ make python3 curl git sqlite rsync unzip > /dev/null
         green "  System packages installed (dnf)"
     elif command -v pacman &>/dev/null; then
-        pacman -Sy --noconfirm --needed base-devel python curl git sqlite unzip > /dev/null
+        pacman -Sy --noconfirm --needed base-devel python curl git sqlite rsync unzip > /dev/null
         green "  System packages installed (pacman)"
     elif command -v apk &>/dev/null; then
-        apk add --no-cache build-base python3 curl git sqlite unzip > /dev/null
+        apk add --no-cache build-base python3 curl git sqlite rsync unzip > /dev/null
         green "  System packages installed (apk)"
     else
         yellow "  Warning: Unrecognized package manager"
-        yellow "  Please ensure build tools, python3, curl, git, sqlite3, unzip are installed"
+        yellow "  Please ensure build tools, python3, curl, git, sqlite3, rsync, unzip are installed"
     fi
 else
     red "Error: Unsupported OS '$OS'. This script supports macOS (Darwin) and Linux."
@@ -202,12 +202,22 @@ chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$REPO_DIR/.next"
 echo ""
 echo "Deploying to $INSTALL_DIR..."
 if [ -d "$INSTALL_DIR" ]; then
+    # Backup database before re-install (service is already stopped above)
+    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
+        BACKUP="$INSTALL_DIR/data/jarvis.db.bak.$(date +%s)"
+        sqlite3 "$INSTALL_DIR/data/jarvis.db" ".backup '$BACKUP'"
+        chmod 600 "$BACKUP"
+        green "  Database backed up to $BACKUP"
+        # Keep only the 3 most recent backups
+        ls -t "$INSTALL_DIR/data/jarvis.db.bak."* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+    fi
     # Preserve data/ (SQLite database) on re-install
     find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
 else
     mkdir -p "$INSTALL_DIR"
 fi
-cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
+# Copy standalone build but exclude data/ to preserve any existing database
+rsync -a --exclude='/data' "$STANDALONE_DIR/" "$INSTALL_DIR/"
 sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
 
@@ -216,17 +226,18 @@ mkdir -p "$INSTALL_DIR/data"
 
 # Copy better-sqlite3 native addon (not included in standalone bundle)
 if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
-    mkdir -p "$INSTALL_DIR/node_modules"
-    cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+    mkdir -p "$INSTALL_DIR/node_modules/better-sqlite3"
+    rsync -a "$REPO_DIR/node_modules/better-sqlite3/" "$INSTALL_DIR/node_modules/better-sqlite3/"
 fi
 
 # Copy agents directory and runner scripts (for cron-based agent execution)
+# Use rsync to merge into existing dirs (cp -R creates nested duplicates)
 if [ -d "$REPO_DIR/agents" ]; then
-    cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
+    rsync -a "$REPO_DIR/agents/" "$INSTALL_DIR/agents/"
 fi
-cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
-cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
-cp -R "$REPO_DIR/drizzle" "$INSTALL_DIR/drizzle"
+rsync -a "$REPO_DIR/src/" "$INSTALL_DIR/src/"
+rsync -a "$REPO_DIR/scripts/" "$INSTALL_DIR/scripts/"
+rsync -a "$REPO_DIR/drizzle/" "$INSTALL_DIR/drizzle/"
 cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
