@@ -1,14 +1,32 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { AgentForm } from "@/components/agents/agent-form";
 import type { AgentFormData } from "@/components/agents/agent-form";
 
 export default function NewAgentPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [projectName, setProjectName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/projects/${params.id}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          setError("Project not found");
+          return;
+        }
+        const data = await res.json();
+        setProjectName(data.name);
+      })
+      .catch(() => setError("Failed to load project"))
+      .finally(() => setLoading(false));
+  }, [params.id]);
 
   const handleSubmit = async (data: AgentFormData) => {
     const res = await fetch(`/api/projects/${params.id}/agents`, {
@@ -34,6 +52,28 @@ export default function NewAgentPage() {
     router.push(`/projects/${params.id}/agents/${agent.id}`);
   };
 
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="flex items-center gap-2 text-[13px] font-mono text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
+          loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        <p className="text-[14px] font-mono text-red">[ERROR] {error}</p>
+        <Link href="/projects" className="text-[13px] font-mono text-accent hover:underline">
+          <ArrowLeft className="inline h-3 w-3 mr-1" />back to projects
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="page-header">
@@ -55,7 +95,7 @@ export default function NewAgentPage() {
                 </h1>
               </div>
               <p className="text-[13px] font-mono text-muted-foreground mt-1 ml-7">
-                // configure a new autonomous agent
+                // configure a new autonomous agent in {projectName}
               </p>
             </div>
           </div>
