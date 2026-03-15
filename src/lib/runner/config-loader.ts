@@ -8,13 +8,9 @@ const AgentConfigSchema = z.object({
   enabled: z.boolean(),
   schedule: z.string(),
   timezone: z.string().optional(),
-  llm: z
-    .object({
-      provider: z.enum(["gemini", "openai", "anthropic"]).optional(),
-      model: z.string().optional(),
-      temperature: z.number().optional(),
-    })
-    .optional(),
+  envVars: z.record(z.string(), z.string()).optional(),
+  // Legacy fields (ignored, kept for backward compat with existing config.json files)
+  llm: z.any().optional(),
   maxTokens: z.number().optional(),
 });
 

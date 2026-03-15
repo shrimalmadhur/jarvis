@@ -26,10 +26,7 @@ export async function GET(
       enabled: def.config.enabled,
       schedule: def.config.schedule,
       timezone: def.config.timezone || null,
-      model: def.config.llm?.model || null,
-      provider: def.config.llm?.provider || "gemini",
-      temperature: def.config.llm?.temperature || null,
-      maxTokens: def.config.maxTokens || null,
+      envVarCount: Object.keys(def.config.envVars || {}).length,
       soul: def.soul,
       skill: def.skill,
     });

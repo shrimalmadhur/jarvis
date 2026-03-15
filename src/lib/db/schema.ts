@@ -93,6 +93,32 @@ export const notificationConfigs = sqliteTable("notification_configs", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });
 
+// ── Projects ──────────────────────────────────────────────────
+
+export const projects = sqliteTable("projects", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+});
+
+// ── Agents (DB-managed) ───────────────────────────────────────
+
+export const agents = sqliteTable("agents", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).default(true).notNull(),
+  soul: text("soul").notNull(),
+  skill: text("skill").notNull(),
+  schedule: text("schedule").notNull(),
+  timezone: text("timezone"),
+  envVars: text("env_vars", { mode: "json" }).$type<Record<string, string>>().default({}),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+});
+
 // ── Claude Sessions (persisted from ~/.claude/) ──────────────
 
 export const claudeSessions = sqliteTable("claude_sessions", {
@@ -164,12 +190,35 @@ export const claudeSessionTasks = sqliteTable("claude_session_tasks", {
 export const agentRuns = sqliteTable("agent_runs", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   agentName: text("agent_name").notNull(),
+  agentId: text("agent_id").references(() => agents.id, { onDelete: "set null" }),
   status: text("status").notNull(), // 'success' | 'error'
   output: text("output"),
   model: text("model"),
   promptTokens: integer("prompt_tokens"),
   completionTokens: integer("completion_tokens"),
+  toolUseCount: integer("tool_use_count").default(0),
   durationMs: integer("duration_ms"),
   error: text("error"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+});
+
+// ── Agent Run Tool Uses ──────────────────────────────────────
+
+export type ToolUseData = {
+  name: string;
+  input: string; // JSON string of tool input
+  output: string; // JSON string of tool output
+  isError: boolean;
+  durationMs?: number;
+};
+
+export const agentRunToolUses = sqliteTable("agent_run_tool_uses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: text("run_id").references(() => agentRuns.id, { onDelete: "cascade" }).notNull(),
+  toolName: text("tool_name").notNull(),
+  toolInput: text("tool_input"),  // JSON string
+  toolOutput: text("tool_output"), // JSON string (truncated if large)
+  isError: integer("is_error", { mode: "boolean" }).default(false).notNull(),
+  durationMs: integer("duration_ms"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });

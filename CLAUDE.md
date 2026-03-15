@@ -27,8 +27,13 @@ Chat UI → API Routes → Agent Core (agentic loop)
                          ├── Built-in Tools (filesystem, time)
                          └── MCP Client Manager → MCP Servers (subprocesses)
 
+Projects UI → API Routes → DB (projects + agents tables)
+                             ├── CRUD for projects
+                             ├── CRUD for agents within projects
+                             └── Telegram notification config per agent
+
 Cron Runner → scripts/run-agents.ts → Agent Runner
-                ├── Reads agents/{name}/{soul.md, skill.md, config.json}
+                ├── Loads DB agents (primary) + filesystem agents (legacy, deduped)
                 ├── Calls LLM provider directly
                 ├── Logs runs to agent_runs table (SQLite)
                 └── Sends result to per-agent Telegram bot
@@ -43,7 +48,7 @@ The agent core (`src/lib/agent/core.ts`) implements an agentic loop:
 ## Project Structure
 
 ```
-agents/                                # Autonomous agent definitions
+agents/                                # Legacy filesystem agent definitions (deprecated)
   food-facts/                          # Example agent
     soul.md                            # Agent personality/system prompt
     skill.md                           # Task instructions per run
@@ -58,11 +63,24 @@ src/
       layout.tsx                      # Sidebar + main area
       chat/page.tsx                   # New chat
       chat/[id]/page.tsx              # Conversation view
+      projects/page.tsx               # Projects list + create
+      projects/[id]/page.tsx          # Project detail (agents list)
+      projects/[id]/agents/new/page.tsx       # Create agent form
+      projects/[id]/agents/[agentId]/page.tsx # Agent detail (edit, runs, telegram)
+      agents/page.tsx                 # Redirects to /projects
       settings/page.tsx               # MCP servers + LLM config
     api/
       agent/chat/route.ts             # POST - send message, get response
       agent/conversations/route.ts    # GET - list conversations
       agent/conversations/[id]/route.ts # GET - conversation with messages
+      projects/route.ts               # GET/POST - list/create projects
+      projects/[id]/route.ts          # GET/PATCH/DELETE - project CRUD
+      projects/[id]/agents/route.ts   # GET/POST - list/create agents in project
+      agents/[agentId]/route.ts       # GET/PATCH/DELETE - agent CRUD
+      agents/[agentId]/runs/route.ts  # GET - agent run history
+      agents/[agentId]/telegram/route.ts       # GET/POST/DELETE - telegram config
+      agents/[agentId]/telegram/setup/route.ts # POST - validate/poll telegram
+      agents/[agentId]/telegram/test/route.ts  # POST - test telegram
       mcp/servers/route.ts            # GET/POST - list/add MCP servers
       mcp/servers/[id]/route.ts       # PATCH/DELETE - update/remove server
       mcp/tools/route.ts              # GET - list available tools
@@ -83,7 +101,8 @@ src/
         anthropic.ts                  # Anthropic provider
     runner/
       types.ts                        # AgentConfig, AgentDefinition, RunResult
-      config-loader.ts                # Reads agents/ dir, resolves env vars
+      config-loader.ts                # Reads agents/ dir (legacy filesystem agents)
+      db-config-loader.ts             # Reads agents from DB (primary source)
       agent-runner.ts                 # Headless agentic loop for cron agents
       telegram-sender.ts              # Sends results to per-agent Telegram bot
       run-log.ts                      # Logs runs to agent_runs table
@@ -93,13 +112,20 @@ src/
       types.ts                        # MCPServerConfig, MCPToolDefinition, MCPToolResult
     db/
       index.ts                        # SQLite connection (better-sqlite3, WAL mode)
-      schema.ts                       # Drizzle schema: conversations, messages, agent_tasks, mcp_servers, llm_configs, agent_runs
+      schema.ts                       # Drizzle schema (see Database section)
+    utils/
+      cron.ts                         # cronToHuman() - shared cron expression formatter
+    validations/
+      project.ts                      # Zod schemas for project create/update
+      agent.ts                        # Zod schemas for agent create/update
   components/
     ui/                               # Button, Card (shadcn-style primitives)
     chat/                             # ChatInput, ChatMessage, ChatMessagesList
-    layout/sidebar.tsx                # Navigation sidebar
+    agents/agent-form.tsx             # Reusable agent create/edit form
+    layout/top-nav.tsx                # Navigation bar
 scripts/
-    run-agents.ts                     # CLI: bun run scripts/run-agents.ts [agent-name]
+    run-agents.ts                     # CLI: bun run scripts/run-agents.ts [agent-name] [--project name]
+    migrate-fs-agents.ts              # One-time: migrate filesystem agents to DB
     install-cron.sh                   # Generate crontab entries from agent configs
 data/
     jarvis.db                         # SQLite database (gitignored)
@@ -109,7 +135,12 @@ data/
 
 SQLite via `better-sqlite3`. Schema defined in `src/lib/db/schema.ts`. DB file at `data/jarvis.db` (auto-created).
 
-**Tables**: `conversations`, `messages`, `agent_tasks`, `mcp_servers`, `llm_configs`, `notification_configs`, `agent_runs`
+**Tables**: `conversations`, `messages`, `agent_tasks`, `mcp_servers`, `llm_configs`, `notification_configs`, `projects`, `agents`, `agent_runs`, `claude_sessions`, `claude_session_timeline`, `claude_session_sub_agents`, `claude_session_tasks`
+
+**Projects & Agents** (DB-managed):
+- `projects` - top-level containers for agents (name is unique)
+- `agents` - agent definitions with soul, skill, schedule, LLM config. FK to projects (cascade delete). Name must be unique within a project (enforced in API).
+- `agent_runs.agentId` - optional FK to agents table (set for DB agents, null for legacy filesystem agents)
 
 Schema changes:
 ```bash
@@ -118,20 +149,20 @@ bun run drizzle-kit push   # Apply schema to local SQLite
 
 ## Agent Runner
 
-Autonomous agents run on a cron schedule via `scripts/run-agents.ts`:
+Autonomous agents are managed via UI (Projects → Agents) and stored in the database. Legacy filesystem agents (`agents/` dir) are still supported but deprecated.
 
 ```bash
-bun run run-agents              # Run all enabled agents
-bun run run-agents food-facts   # Run specific agent
-bun run run-agents --list       # List configured agents
+bun run run-agents                    # Run all enabled agents (DB + filesystem, deduped)
+bun run run-agents food-facts         # Run specific agent by name
+bun run run-agents --project MyProj   # Run only agents from a specific project
+bun run run-agents --list             # List configured agents
+bun run scripts/migrate-fs-agents.ts  # One-time: migrate filesystem agents to DB
 ```
 
-Each agent lives in `agents/{name}/` with:
-- `soul.md` - personality/system prompt
-- `skill.md` - task instructions for each run
-- `config.json` - schedule, Telegram bot config, LLM model
+**DB agents** (primary): Created via UI, stored in `agents` table. Each belongs to a project.
+**Filesystem agents** (legacy): Each lives in `agents/{name}/` with `soul.md`, `skill.md`, `config.json`. DB agents with the same name take precedence (dedup).
 
-Telegram secrets use `${ENV_VAR}` syntax in config.json, resolved at runtime.
+Telegram notifications are configured per-agent via the UI. Config stored in `notification_configs` table with channel key `telegram-agent:{agentId}`.
 
 ## Key Design Decisions
 
@@ -141,6 +172,7 @@ Telegram secrets use `${ENV_VAR}` syntax in config.json, resolved at runtime.
 - **Provider parts preservation**: Gemini 3+ models require "thought signatures" on function call parts. Raw Gemini response parts are stored in `_providerParts` on `LLMMessage` and persisted via `provider_data` JSON column. The Gemini provider replays these verbatim to avoid thought signature errors.
 - **LLM model passed via constructor**: Each provider accepts `(apiKey?, model?)`. The router passes `config.model` from DB or defaults.
 - **Agent runner is stateless**: Each cron run is independent. Recent run outputs are queried from `agent_runs` table to inject context (e.g., topic dedup).
+- **Projects → Agents hierarchy**: Agents are organized into projects (DB-backed). All agent CRUD is done via UI/API. The `agents/` filesystem directory is legacy — DB agents take precedence when both exist with the same name.
 
 ## Environment Variables
 

@@ -1,45 +1,8 @@
-import type { LLMProvider, LLMMessage } from "@/lib/ai/types";
-import { GeminiProvider } from "@/lib/ai/providers/gemini";
-import { OpenAIProvider } from "@/lib/ai/providers/openai";
-import { AnthropicProvider } from "@/lib/ai/providers/anthropic";
-import type { AgentDefinition, RunResult } from "./types";
-
-const MAX_TOOL_ITERATIONS = 10;
-const DEFAULT_PROVIDER = "gemini";
-const DEFAULT_MODEL = "gemini-3-flash-preview";
-const DEFAULT_TEMPERATURE = 0.7;
+import { spawn, type ChildProcess } from "node:child_process";
+import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
 
 /**
- * Create an LLM provider from agent config.
- */
-function createProvider(definition: AgentDefinition): {
-  provider: LLMProvider;
-  temperature: number;
-} {
-  const llmConfig = definition.config.llm;
-  const providerName = llmConfig?.provider || DEFAULT_PROVIDER;
-  const model = llmConfig?.model || DEFAULT_MODEL;
-  const temperature = llmConfig?.temperature ?? DEFAULT_TEMPERATURE;
-
-  let provider: LLMProvider;
-  switch (providerName) {
-    case "openai":
-      provider = new OpenAIProvider(undefined, model);
-      break;
-    case "anthropic":
-      provider = new AnthropicProvider(undefined, model);
-      break;
-    case "gemini":
-    default:
-      provider = new GeminiProvider(undefined, model);
-      break;
-  }
-
-  return { provider, temperature };
-}
-
-/**
- * Build the user message from skill.md + context.
+ * Build the user message from skill + context.
  */
 function buildUserMessage(
   definition: AgentDefinition,
@@ -47,15 +10,26 @@ function buildUserMessage(
 ): string {
   const parts: string[] = [];
 
-  // Inject context
   parts.push(`## Context`);
   parts.push(`Today's date: ${new Date().toISOString().split("T")[0]}`);
+
+  // List available env vars so Claude knows what's available
+  const envVars = definition.config.envVars;
+  if (envVars && Object.keys(envVars).length > 0) {
+    parts.push("");
+    parts.push(`## Available Environment Variables`);
+    parts.push("The following environment variables are set in your environment:");
+    for (const key of Object.keys(envVars)) {
+      parts.push(`- \`${key}\``);
+    }
+    parts.push("");
+    parts.push("Use these to access external services as needed for your task.");
+  }
 
   if (context?.recentOutputs?.length) {
     parts.push("");
     parts.push(`## Recent outputs (do NOT repeat these topics)`);
     for (const output of context.recentOutputs.slice(0, 10)) {
-      // Take first line as topic summary
       const firstLine = output.split("\n")[0].substring(0, 100);
       parts.push(`- ${firstLine}`);
     }
@@ -68,100 +42,193 @@ function buildUserMessage(
 }
 
 /**
- * Run an agent task headlessly (no conversation tracking).
- * Returns the result with output text, usage, and timing.
+ * Run an agent task via Claude CLI.
+ * Spawns `claude -p` with the agent's env vars and full tool access.
+ * Parses stream-json output for tool use logging.
  */
 export async function runAgentTask(
   definition: AgentDefinition,
   context?: { recentOutputs?: string[] }
 ): Promise<RunResult> {
   const startTime = Date.now();
-  const { provider, temperature } = createProvider(definition);
+  const userMessage = buildUserMessage(definition, context);
 
-  const llmMessages: LLMMessage[] = [
-    { role: "system", content: definition.soul },
-    { role: "user", content: buildUserMessage(definition, context) },
+  // Build the full prompt: soul as system prompt context + user message
+  const prompt = userMessage;
+
+  const args = [
+    "-p",
+    "--verbose",
+    "--output-format", "stream-json",
+    "--dangerously-skip-permissions",
+    "--append-system-prompt", definition.soul,
   ];
 
-  let totalPromptTokens = 0;
-  let totalCompletionTokens = 0;
-  let modelName = definition.config.llm?.model || DEFAULT_MODEL;
+  // Merge agent env vars with process env (deny-list dangerous keys)
+  const DENIED_ENV_KEYS = new Set([
+    "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "NODE_OPTIONS",
+    "HOME", "SHELL", "USER", "LOGNAME", "DYLD_INSERT_LIBRARIES",
+  ]);
+  const childEnv: NodeJS.ProcessEnv = { ...process.env };
+  const envVars = definition.config.envVars;
+  if (envVars) {
+    for (const [key, value] of Object.entries(envVars)) {
+      if (!DENIED_ENV_KEYS.has(key.toUpperCase())) {
+        childEnv[key] = value;
+      }
+    }
+  }
+  childEnv.FORCE_COLOR = "0";
 
-  try {
-    let iterations = 0;
+  const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
-    while (iterations < MAX_TOOL_ITERATIONS) {
-      const response = await provider.chat({
-        messages: llmMessages,
-        temperature,
-        maxTokens: definition.config.maxTokens,
-      });
+  return new Promise<RunResult>((resolve) => {
+    const proc: ChildProcess = spawn("claude", args, {
+      env: childEnv,
+    });
 
-      modelName = response.model;
-      totalPromptTokens += response.usage.promptTokens;
-      totalCompletionTokens += response.usage.completionTokens;
+    const agentTimer = setTimeout(() => {
+      proc.kill("SIGTERM");
+    }, AGENT_TIMEOUT_MS);
 
-      // No tools for v1 - agent should always return text
-      if (
-        response.finishReason === "tool_calls" &&
-        response.message.toolCalls?.length
-      ) {
-        // If the model tries to call tools, tell it no tools are available
-        llmMessages.push(response.message);
-        for (const toolCall of response.message.toolCalls) {
-          llmMessages.push({
-            role: "tool",
-            toolCallId: toolCall.id,
-            name: toolCall.function.name,
-            content: JSON.stringify({
-              error: "No tools are available. Please respond with text only.",
-            }),
-          });
+    proc.stdin!.write(prompt);
+    proc.stdin!.end();
+
+    let buffer = "";
+    let resultText = "";
+    let model = "claude";
+    let promptTokens = 0;
+    let completionTokens = 0;
+    const toolUses: ToolUseLog[] = [];
+
+    // Track in-flight tool calls by ID
+    const pendingTools = new Map<string, { name: string; input: string; startTime: number }>();
+
+    proc.stdout!.on("data", (chunk: Buffer) => {
+      buffer += chunk.toString();
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        try {
+          const event = JSON.parse(trimmed);
+
+          // Capture result text
+          if (event.type === "result") {
+            if (event.result) resultText = event.result;
+            if (event.cost_usd !== undefined) {
+              // stream-json result includes token usage in some versions
+            }
+            if (event.input_tokens) promptTokens = event.input_tokens;
+            if (event.output_tokens) completionTokens = event.output_tokens;
+            if (event.model) model = event.model;
+          }
+
+          // Capture assistant messages for tool calls
+          if (event.type === "assistant" && event.message?.content) {
+            const content = event.message.content;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === "tool_use") {
+                  pendingTools.set(block.id, {
+                    name: block.name,
+                    input: JSON.stringify(block.input || {}),
+                    startTime: Date.now(),
+                  });
+                }
+              }
+            }
+            // Capture model name
+            if (event.message.model) model = event.message.model;
+          }
+
+          // Capture tool results
+          if (event.type === "user" && event.message?.content) {
+            const content = event.message.content;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === "tool_result" && block.tool_use_id) {
+                  const pending = pendingTools.get(block.tool_use_id);
+                  if (pending) {
+                    const outputText = typeof block.content === "string"
+                      ? block.content
+                      : Array.isArray(block.content)
+                        ? block.content.map((c: { text?: string }) => c.text || "").join("")
+                        : JSON.stringify(block.content);
+
+                    toolUses.push({
+                      toolName: pending.name,
+                      toolInput: pending.input.substring(0, 4000),
+                      toolOutput: outputText.substring(0, 4000),
+                      isError: block.is_error || false,
+                      durationMs: Date.now() - pending.startTime,
+                    });
+                    pendingTools.delete(block.tool_use_id);
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // Not valid JSON, skip
         }
-        iterations++;
-        continue;
+      }
+    });
+
+    let stderrOutput = "";
+    proc.stderr!.on("data", (chunk: Buffer) => {
+      stderrOutput += chunk.toString();
+      if (stderrOutput.length > 10000) stderrOutput = stderrOutput.slice(-10000);
+    });
+
+    proc.on("close", (code: number | null) => {
+      clearTimeout(agentTimer);
+      const durationMs = Date.now() - startTime;
+
+      if (code !== 0 && !resultText) {
+        resolve({
+          agentName: definition.config.name,
+          agentId: definition.agentId,
+          success: false,
+          output: "",
+          model,
+          tokensUsed: { prompt: promptTokens, completion: completionTokens },
+          toolUses,
+          durationMs,
+          error: stderrOutput || `Claude CLI exited with code ${code}`,
+        });
+        return;
       }
 
-      // Final text response
-      const output = response.message.content || "";
-      return {
+      resolve({
         agentName: definition.config.name,
+        agentId: definition.agentId,
         success: true,
-        output,
-        model: modelName,
-        tokensUsed: {
-          prompt: totalPromptTokens,
-          completion: totalCompletionTokens,
-        },
-        durationMs: Date.now() - startTime,
-      };
-    }
+        output: resultText,
+        model,
+        tokensUsed: { prompt: promptTokens, completion: completionTokens },
+        toolUses,
+        durationMs,
+      });
+    });
 
-    // Hit max iterations
-    return {
-      agentName: definition.config.name,
-      success: false,
-      output: "",
-      model: modelName,
-      tokensUsed: {
-        prompt: totalPromptTokens,
-        completion: totalCompletionTokens,
-      },
-      durationMs: Date.now() - startTime,
-      error: "Max tool iterations reached without text response",
-    };
-  } catch (error) {
-    return {
-      agentName: definition.config.name,
-      success: false,
-      output: "",
-      model: modelName,
-      tokensUsed: {
-        prompt: totalPromptTokens,
-        completion: totalCompletionTokens,
-      },
-      durationMs: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+    proc.on("error", (err: Error) => {
+      clearTimeout(agentTimer);
+      resolve({
+        agentName: definition.config.name,
+        agentId: definition.agentId,
+        success: false,
+        output: "",
+        model,
+        tokensUsed: { prompt: promptTokens, completion: completionTokens },
+        toolUses,
+        durationMs: Date.now() - startTime,
+        error: err.message,
+      });
+    });
+  });
 }

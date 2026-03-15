@@ -1,0 +1,139 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { agents, projects, agentRuns } from "@/lib/db/schema";
+import { eq, desc, and, sql } from "drizzle-orm";
+import { createAgentSchema } from "@/lib/validations/agent";
+import { cronToHuman } from "@/lib/utils/cron";
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    // Verify project exists
+    const projectRows = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, id))
+      .limit(1);
+
+    if (projectRows.length === 0) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const projectAgents = await db
+      .select()
+      .from(agents)
+      .where(eq(agents.projectId, id));
+
+    // Batch-fetch latest run for all agents in one query
+    const agentIds = projectAgents.map((a) => a.id);
+    const latestRuns = agentIds.length > 0
+      ? await db
+          .select()
+          .from(agentRuns)
+          .where(
+            sql`${agentRuns.agentId} IN (${sql.join(agentIds.map((id) => sql`${id}`), sql`, `)}) AND ${agentRuns.createdAt} = (SELECT MAX(created_at) FROM agent_runs ar2 WHERE ar2.agent_id = ${agentRuns.agentId})`
+          )
+      : [];
+
+    const runsByAgentId = new Map(latestRuns.map((r) => [r.agentId, r]));
+
+    const result = projectAgents.map((agent) => {
+      const lastRun = runsByAgentId.get(agent.id) || null;
+
+      return {
+        id: agent.id,
+        name: agent.name,
+        enabled: agent.enabled,
+        schedule: agent.schedule,
+        scheduleHuman: cronToHuman(agent.schedule),
+        timezone: agent.timezone,
+        envVarCount: Object.keys((agent.envVars as Record<string, string>) || {}).length,
+        soulExcerpt: agent.soul.slice(0, 150).replace(/\n/g, " ").trim(),
+        lastRun: lastRun
+          ? {
+              status: lastRun.status,
+              createdAt: lastRun.createdAt?.toISOString() || null,
+              durationMs: lastRun.durationMs,
+              promptTokens: lastRun.promptTokens,
+              completionTokens: lastRun.completionTokens,
+              error: lastRun.error,
+            }
+          : null,
+      };
+    });
+
+    return NextResponse.json({ agents: result });
+  } catch (error) {
+    console.error("Error loading project agents:", error);
+    return NextResponse.json({ error: "Failed to load agents" }, { status: 500 });
+  }
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    // Verify project exists
+    const projectRows = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, id))
+      .limit(1);
+
+    if (projectRows.length === 0) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const parsed = createAgentSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    // Check uniqueness within project
+    const existing = await db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        and(eq(agents.projectId, id), eq(agents.name, parsed.data.name))
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      return NextResponse.json(
+        { error: "An agent with this name already exists in this project" },
+        { status: 409 }
+      );
+    }
+
+    const [agent] = await db
+      .insert(agents)
+      .values({
+        projectId: id,
+        name: parsed.data.name,
+        soul: parsed.data.soul,
+        skill: parsed.data.skill,
+        schedule: parsed.data.schedule,
+        timezone: parsed.data.timezone || null,
+        envVars: parsed.data.envVars || {},
+        enabled: parsed.data.enabled ?? true,
+      })
+      .returning();
+
+    return NextResponse.json(agent, { status: 201 });
+  } catch (error) {
+    console.error("Error creating agent:", error);
+    return NextResponse.json({ error: "Failed to create agent" }, { status: 500 });
+  }
+}
