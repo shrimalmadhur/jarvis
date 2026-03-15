@@ -36,6 +36,10 @@ async function main() {
 
   // Merge: DB agents take precedence, skip FS agents with same name
   const dbNames = new Set(dbDefinitions.map((d) => d.config.name));
+  const skippedFs = fsDefinitions.filter((d) => dbNames.has(d.config.name));
+  if (skippedFs.length > 0) {
+    console.log(`[jarvis] Skipping ${skippedFs.length} filesystem agent(s) that exist in DB: ${skippedFs.map((d) => d.config.name).join(", ")}`);
+  }
   const deduped: AgentDefinition[] = [
     ...dbDefinitions,
     ...fsDefinitions.filter((d) => !dbNames.has(d.config.name)),
