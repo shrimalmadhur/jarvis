@@ -142,10 +142,14 @@ SQLite via `better-sqlite3`. Schema defined in `src/lib/db/schema.ts`. DB file a
 - `agents` - agent definitions with soul, skill, schedule, LLM config. FK to projects (cascade delete). Name must be unique within a project (enforced in API).
 - `agent_runs.agentId` - optional FK to agents table (set for DB agents, null for legacy filesystem agents)
 
-Schema changes:
-```bash
-bun run drizzle-kit push   # Apply schema to local SQLite
-```
+**Migrations** (auto-applied on startup via `src/lib/db/auto-migrate.ts`):
+
+Schema changes must go through drizzle migrations — never use `drizzle-kit push` directly:
+1. Edit `src/lib/db/schema.ts`
+2. Run `bun run db:generate` to create a new migration file in `drizzle/`
+3. Commit the migration file — it gets applied automatically on next app startup
+
+Migration files in `drizzle/` are tracked by drizzle's `__drizzle_migrations` table. The app calls `migrate()` on every startup, so users never need to run manual migration commands after upgrading.
 
 ## Agent Runner
 

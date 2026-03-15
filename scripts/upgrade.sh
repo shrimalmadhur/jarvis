@@ -33,12 +33,7 @@ bun install --frozen-lockfile
 # (bun install compiles it for Bun's internal Node, but Next.js build workers use system Node)
 echo ""
 echo "Rebuilding native modules for Node $(node --version)..."
-npm rebuild better-sqlite3 2>/dev/null || true
-
-# --- Apply DB schema changes ---
-echo ""
-echo "Applying database schema..."
-bun run drizzle-kit push 2>/dev/null || true
+npm rebuild better-sqlite3
 
 # --- Build ---
 echo ""
@@ -63,13 +58,45 @@ fi
 mkdir -p "$STANDALONE_DIR/.next"
 cp -R "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
 
+# --- Stop service before deploy ---
+echo ""
+echo "Stopping $SERVICE_NAME..."
+if [ "$OS" = "Darwin" ]; then
+    ACTUAL_UID="$(id -u)"
+    launchctl kill SIGTERM gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
+    sleep 1
+else
+    sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+fi
+
 # --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
-rm -rf "$INSTALL_DIR"/* "$INSTALL_DIR"/.next 2>/dev/null || true
+# Remove everything except data/ (preserves the SQLite database)
+find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
 cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
 sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
+
+# Copy better-sqlite3 native addon (not included in standalone bundle)
+if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
+    mkdir -p "$INSTALL_DIR/node_modules"
+    cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+fi
+
+# Copy drizzle migrations, agents, runner scripts, and configs
+cp -R "$REPO_DIR/drizzle" "$INSTALL_DIR/drizzle"
+if [ -d "$REPO_DIR/agents" ]; then
+    cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
+fi
+cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
+cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
+cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
+cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
+cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
+
+# Ensure data directory exists (preserves existing DB)
+mkdir -p "$INSTALL_DIR/data"
 
 # --- Restart service (OS-specific) ---
 echo ""

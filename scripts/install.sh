@@ -201,8 +201,12 @@ chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$REPO_DIR/.next"
 # --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
-rm -rf "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR"
+if [ -d "$INSTALL_DIR" ]; then
+    # Preserve data/ (SQLite database) on re-install
+    find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
+else
+    mkdir -p "$INSTALL_DIR"
+fi
 cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
 sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
@@ -222,6 +226,7 @@ if [ -d "$REPO_DIR/agents" ]; then
 fi
 cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
 cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
+cp -R "$REPO_DIR/drizzle" "$INSTALL_DIR/drizzle"
 cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
@@ -347,14 +352,6 @@ else
         red "  sudo journalctl -u jarvis -n 50"
     fi
 fi
-
-# --- Apply database schema ---
-echo ""
-echo "Applying database schema..."
-cd "$REPO_DIR"
-# Apply schema to the installed database (production)
-DATABASE_PATH="$INSTALL_DIR/data/jarvis.db" sudo -u "$ACTUAL_USER" "$BUN_BIN" run drizzle-kit push 2>&1 | tail -1
-green "  Database schema applied"
 
 # --- Install agent cron jobs ---
 echo ""

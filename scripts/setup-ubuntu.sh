@@ -55,6 +55,11 @@ cd "$REPO_DIR"
 bun install --frozen-lockfile
 green "  Dependencies installed"
 
+# Rebuild better-sqlite3 for the system Node.js version
+echo ""
+echo "Rebuilding native modules for Node $(node --version)..."
+npm rebuild better-sqlite3
+
 echo ""
 echo "Step $($UPGRADE && echo 4 || echo 3): Building..."
 bun run build
@@ -68,13 +73,7 @@ sudo mkdir -p /var/log/jarvis
 sudo chown "$(whoami)" /var/log/jarvis
 green "  Directories ready"
 
-# ── 6. Push SQLite schema ──────────────────────
-echo ""
-echo "Step $($UPGRADE && echo 6 || echo 5): Applying database schema..."
-bun run drizzle-kit push 2>&1 | tail -1
-green "  Database schema applied"
-
-# ── 7. Environment file ────────────────────────
+# ── 6. Environment file ────────────────────────
 echo ""
 ENV_FILE="/etc/jarvis/env"
 if [ ! -f "$ENV_FILE" ]; then
@@ -115,8 +114,12 @@ INSTALL_DIR="/usr/local/lib/jarvis"
 STANDALONE_DIR="$REPO_DIR/.next/standalone"
 NODE_BIN_DIR="$(dirname "$(command -v node)")"
 
-sudo rm -rf "$INSTALL_DIR"
-sudo mkdir -p "$INSTALL_DIR"
+if [ -d "$INSTALL_DIR" ]; then
+    # Preserve data/ (SQLite database) on re-install/upgrade
+    sudo find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
+else
+    sudo mkdir -p "$INSTALL_DIR"
+fi
 
 # Copy standalone build
 sudo cp -R "$STANDALONE_DIR/." "$INSTALL_DIR/"
@@ -131,9 +134,16 @@ sudo cp -r "$REPO_DIR/.next/static" "$INSTALL_DIR/.next/static"
 # SQLite data directory
 sudo mkdir -p "$INSTALL_DIR/data"
 
+# Copy better-sqlite3 native addon (not included in standalone bundle)
+if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
+    sudo mkdir -p "$INSTALL_DIR/node_modules"
+    sudo cp -R "$REPO_DIR/node_modules/better-sqlite3" "$INSTALL_DIR/node_modules/"
+fi
+
 # Runner dependencies: agents, source, scripts, configs
 [ -d "$REPO_DIR/agents" ] && sudo cp -R "$REPO_DIR/agents" "$INSTALL_DIR/agents"
 sudo cp -R "$REPO_DIR/src" "$INSTALL_DIR/src"
+sudo cp -R "$REPO_DIR/drizzle" "$INSTALL_DIR/drizzle"
 sudo cp -R "$REPO_DIR/scripts" "$INSTALL_DIR/scripts"
 sudo cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 sudo cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
