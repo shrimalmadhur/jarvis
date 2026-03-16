@@ -4,14 +4,14 @@ import { join } from "node:path";
 import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 import type { RunEvent } from "./run-events";
-import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, updateMemoryAfterRun, buildChildEnv } from "./agent-memory";
+import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, updateMemoryAfterRun, buildChildEnv, hasWorkspaceArchive } from "./agent-memory";
 
 /**
  * Build the user message from skill + context.
  */
 function buildUserMessage(
   definition: AgentDefinition,
-  context?: { workspaceMemory?: string }
+  context?: { workspaceMemory?: string; hasArchive?: boolean }
 ): string {
   const parts: string[] = [];
 
@@ -42,7 +42,7 @@ function buildUserMessage(
   // Inject workspace memory (agent's own persistent memory file)
   if (context?.workspaceMemory) {
     parts.push("");
-    parts.push(formatMemoryForPrompt(context.workspaceMemory));
+    parts.push(formatMemoryForPrompt(context.workspaceMemory, context.hasArchive));
   }
 
   parts.push("");
@@ -86,8 +86,9 @@ export async function runAgentTask(
 
   // Read the agent's persistent memory file from its workspace
   const workspaceMemory = readWorkspaceMemory(workspaceDir);
+  const archiveExists = hasWorkspaceArchive(workspaceDir);
 
-  const userMessage = buildUserMessage(definition, { workspaceMemory });
+  const userMessage = buildUserMessage(definition, { workspaceMemory, hasArchive: archiveExists });
 
   // Build the full prompt: soul as system prompt context + user message
   const prompt = userMessage;

@@ -5,6 +5,8 @@ import {
   readWorkspaceMemory,
   formatMemoryForPrompt,
   extractMemorySection,
+  hasWorkspaceArchive,
+  parseSubAgentOutput,
   MEMORY_CONTEXT_NOTE,
 } from "../agent-memory";
 
@@ -56,6 +58,28 @@ describe("formatMemoryForPrompt", () => {
   test("includes usage guidance", () => {
     const result = formatMemoryForPrompt("some memory");
     expect(result).toContain("avoid repeating work");
+  });
+
+  test("mentions archive when hasArchive is true", () => {
+    const result = formatMemoryForPrompt("some memory", true);
+    expect(result).toContain("memory-archive.md");
+    expect(result).toContain("Detailed history");
+  });
+
+  test("does not mention archive when hasArchive is false", () => {
+    const result = formatMemoryForPrompt("some memory", false);
+    expect(result).not.toContain("memory-archive.md");
+  });
+});
+
+describe("hasWorkspaceArchive", () => {
+  test("returns false when no archive exists", () => {
+    expect(hasWorkspaceArchive(TEST_WORKSPACE)).toBe(false);
+  });
+
+  test("returns true when memory-archive.md exists", () => {
+    writeFileSync(join(TEST_WORKSPACE, "memory-archive.md"), "## Archived\n- old item\n");
+    expect(hasWorkspaceArchive(TEST_WORKSPACE)).toBe(true);
   });
 });
 
@@ -118,5 +142,54 @@ describe("MEMORY_CONTEXT_NOTE", () => {
 
   test("references previous runs section", () => {
     expect(MEMORY_CONTEXT_NOTE).toContain("Your Memory (from previous runs)");
+  });
+});
+
+describe("parseSubAgentOutput", () => {
+  test("returns memory only when no delimiter present", () => {
+    const result = parseSubAgentOutput("## Items\n- Apple\n- Banana", true);
+    expect(result.memory).toBe("## Items\n- Apple\n- Banana");
+    expect(result.archive).toBeUndefined();
+  });
+
+  test("splits on delimiter when compaction requested", () => {
+    const output = "## Items (2 total)\n- Recent\n---ARCHIVE---\n## Archived on 2026-03-16\n- Old item";
+    const result = parseSubAgentOutput(output, true);
+    expect(result.memory).toBe("## Items (2 total)\n- Recent");
+    expect(result.archive).toBe("## Archived on 2026-03-16\n- Old item");
+  });
+
+  test("ignores delimiter when compaction NOT requested", () => {
+    const output = "## Items\n---ARCHIVE---\nshould not split";
+    const result = parseSubAgentOutput(output, false);
+    expect(result.memory).toBe("## Items\n---ARCHIVE---\nshould not split");
+    expect(result.archive).toBeUndefined();
+  });
+
+  test("handles empty memory part with placeholder", () => {
+    const output = "---ARCHIVE---\n## Archived\n- everything moved";
+    const result = parseSubAgentOutput(output, true);
+    expect(result.memory).toContain("compacted");
+    expect(result.archive).toBe("## Archived\n- everything moved");
+  });
+
+  test("handles delimiter at end (no archive content)", () => {
+    const output = "## Items\n- Recent\n---ARCHIVE---";
+    const result = parseSubAgentOutput(output, true);
+    expect(result.memory).toBe("## Items\n- Recent");
+    expect(result.archive).toBeUndefined();
+  });
+
+  test("returns empty memory for empty input", () => {
+    expect(parseSubAgentOutput("", true).memory).toBe("");
+    expect(parseSubAgentOutput("  ", true).memory).toBe("");
+  });
+
+  test("does not match delimiter inside inline text", () => {
+    const output = "Use ---ARCHIVE--- delimiter for splitting\n## Items\n- Apple";
+    const result = parseSubAgentOutput(output, true);
+    // The regex requires the delimiter to be on its own line
+    expect(result.memory).toBe(output);
+    expect(result.archive).toBeUndefined();
   });
 });

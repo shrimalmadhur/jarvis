@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, existsSync, statSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 
 const MEMORY_FILE = "memory.md";
+const ARCHIVE_FILE = "memory-archive.md";
 
 /**
  * Env var keys that must not be overridden by agent config.
@@ -27,7 +28,10 @@ export function buildChildEnv(envVars?: Record<string, string>): NodeJS.ProcessE
   return env;
 }
 const MAX_MEMORY_CHARS = 8000; // Cap injected memory to avoid blowing up context
+const COMPACTION_THRESHOLD = 5000; // Trigger compaction when memory exceeds this (must be < MAX_MEMORY_CHARS)
 const MEMORY_SUB_AGENT_TIMEOUT_MS = 30_000; // 30 seconds
+const ARCHIVE_DELIMITER = "---ARCHIVE---"; // Separates memory from archive in sub-agent output
+const MAX_ARCHIVE_BYTES = 100_000; // Cap archive at ~100KB to prevent unbounded growth
 
 /**
  * Read an agent's memory file from its workspace directory.
@@ -51,20 +55,30 @@ export function readWorkspaceMemory(workspaceDir: string): string {
 /**
  * Format workspace memory for injection into the agent's prompt.
  */
-export function formatMemoryForPrompt(memoryContent: string): string {
+export function formatMemoryForPrompt(memoryContent: string, hasArchive: boolean = false): string {
   if (!memoryContent) return "";
 
-  return [
+  const parts = [
     "## Your Memory (from previous runs)",
     "This is your persistent memory file (`memory.md` in your workspace).",
     "It contains what you chose to remember from past runs.",
     "Use this to avoid repeating work and to build on what you've already done.",
-    "",
-    "---",
-    memoryContent,
-    "---",
-    "",
-  ].join("\n");
+  ];
+
+  if (hasArchive) {
+    parts.push(
+      "Detailed history from older runs is available in `memory-archive.md` in your workspace.",
+      "Read it if you need specifics about past work not covered in the summary below."
+    );
+  }
+
+  parts.push("", "---", memoryContent, "---", "");
+  return parts.join("\n");
+}
+
+/** Check if an archive file exists in the workspace. */
+export function hasWorkspaceArchive(workspaceDir: string): boolean {
+  return existsSync(join(workspaceDir, ARCHIVE_FILE));
 }
 
 /**
@@ -77,6 +91,7 @@ export const MEMORY_CONTEXT_NOTE = `
 Your memory from previous runs is provided in the prompt under "Your Memory (from previous runs)".
 Use it to avoid repeating work and to build on what you've done before.
 Memory updates are handled automatically by the system — do not write to memory.md yourself.
+If an archive file (\`memory-archive.md\`) is mentioned, you can read it for detailed history from older runs.
 `;
 
 /**
@@ -91,6 +106,32 @@ export function extractMemorySection(skill: string): string | null {
   // Remove the heading line and trim
   const content = memorySection.replace(/^##\s+Memory\s*\n?/im, "").trim();
   return content || null;
+}
+
+/**
+ * Parse the memory sub-agent's output into memory and archive parts.
+ * Only splits on the archive delimiter when compaction was requested,
+ * and uses line-anchored matching to avoid false splits inside code blocks.
+ */
+export function parseSubAgentOutput(
+  output: string,
+  needsCompaction: boolean
+): { memory: string; archive?: string } {
+  const trimmed = output.trim();
+  if (!trimmed) return { memory: "" };
+
+  const delimMatch = needsCompaction ? trimmed.match(/^\s*---ARCHIVE---\s*$/m) : null;
+
+  if (delimMatch && delimMatch.index !== undefined) {
+    const memoryPart = trimmed.substring(0, delimMatch.index).trim();
+    const archivePart = trimmed.substring(delimMatch.index + delimMatch[0].length).trim();
+    return {
+      memory: memoryPart || "(compacted — see memory-archive.md)",
+      archive: archivePart || undefined,
+    };
+  }
+
+  return { memory: trimmed };
 }
 
 /**
@@ -121,6 +162,37 @@ export async function updateMemoryAfterRun(opts: {
     ? runOutput.substring(0, maxOutputChars) + "\n\n[output truncated]"
     : runOutput;
 
+  const needsCompaction = currentMemory.length > COMPACTION_THRESHOLD;
+
+  const compactionRules = needsCompaction ? [
+    "",
+    "## Compaction Required",
+    `The current memory is ${currentMemory.length} characters, which exceeds the ${COMPACTION_THRESHOLD} char budget.`,
+    "You MUST compact it:",
+    "- Summarize older individual entries into aggregate summaries (e.g., '47 ingredients analyzed across 6 categories' instead of listing each one).",
+    "- Keep only the 10 most recent items in any list.",
+    "- Drop entries older than 30 days unless still actionable.",
+    "- Move the detailed older entries to the archive section (see output format below).",
+    "",
+    "## Output Format (compaction mode)",
+    "Output the compacted memory.md content first.",
+    `Then on its own line output exactly: ${ARCHIVE_DELIMITER}`,
+    "Then output the detailed entries being archived (these will be APPENDED to memory-archive.md).",
+    "Start the archive section with a date header like: ## Archived on YYYY-MM-DD",
+    "",
+    "Example:",
+    "```",
+    "## Processed Items (47 total)",
+    "- Recent Item A (2026-03-15)",
+    "- Recent Item B (2026-03-14)",
+    "...",
+    `${ARCHIVE_DELIMITER}`,
+    "## Archived on 2026-03-16",
+    "- Old Item X (2026-02-01)",
+    "- Old Item Y (2026-02-05)",
+    "```",
+  ] : [];
+
   const prompt = [
     "You are a memory management assistant. Your job is to update an agent's persistent memory file based on what it just did.",
     "",
@@ -132,13 +204,15 @@ export async function updateMemoryAfterRun(opts: {
     "",
     "## Instructions",
     trackingInstructions,
+    ...compactionRules,
     "",
     "## Rules",
     "- Output ONLY the updated memory.md content — no commentary, no markdown fences, no preamble.",
-    "- Keep it concise — this file is injected into every future run's prompt.",
+    `- Keep memory.md under ${COMPACTION_THRESHOLD} characters — this file is injected into every future run's prompt.`,
     "- Update incrementally — add new info, remove stale entries.",
     "- Do NOT store the full output or restate task instructions.",
     "- Use markdown format with clear sections.",
+    ...(needsCompaction ? [] : [`- If you don't need to archive anything, do NOT include the ${ARCHIVE_DELIMITER} line.`]),
   ].join("\n");
 
   const args = [
@@ -194,7 +268,29 @@ export async function updateMemoryAfterRun(opts: {
 
       if (code === 0 && trimmed) {
         try {
-          writeFileSync(join(workspaceDir, MEMORY_FILE), trimmed + "\n", "utf-8");
+          const parsed = parseSubAgentOutput(trimmed, needsCompaction);
+
+          // Archive first — if this fails, uncompacted memory is still intact
+          if (parsed.archive) {
+            const archivePath = join(workspaceDir, ARCHIVE_FILE);
+            let skipArchive = false;
+            if (existsSync(archivePath)) {
+              try {
+                if (statSync(archivePath).size > MAX_ARCHIVE_BYTES) {
+                  console.warn("[memory sub-agent] archive exceeds 100KB, skipping append");
+                  skipArchive = true;
+                }
+              } catch { /* stat failed, try to append anyway */ }
+            }
+            if (!skipArchive) {
+              const prefix = existsSync(archivePath) ? "\n" : "";
+              appendFileSync(archivePath, prefix + parsed.archive + "\n", "utf-8");
+            }
+          }
+
+          if (parsed.memory) {
+            writeFileSync(join(workspaceDir, MEMORY_FILE), parsed.memory + "\n", "utf-8");
+          }
         } catch (err) {
           console.warn("[memory sub-agent] failed to write memory.md:", err);
         }

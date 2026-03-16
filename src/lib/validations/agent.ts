@@ -1,11 +1,8 @@
 import { z } from "zod";
+import { DENIED_ENV_KEYS } from "@/lib/runner/agent-memory";
 
 const cronRegex = /^(\S+\s+){4}\S+$/;
 const envKeyRegex = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const DENIED_ENV_KEYS = new Set([
-  "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "NODE_OPTIONS",
-  "HOME", "SHELL", "USER", "LOGNAME", "DYLD_INSERT_LIBRARIES",
-]);
 
 export const createAgentSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
