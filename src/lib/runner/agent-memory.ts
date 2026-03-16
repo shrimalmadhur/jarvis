@@ -27,8 +27,8 @@ export function buildChildEnv(envVars?: Record<string, string>): NodeJS.ProcessE
   }
   return env;
 }
-const MAX_MEMORY_CHARS = 8000; // Cap injected memory to avoid blowing up context
-const COMPACTION_THRESHOLD = 5000; // Trigger compaction when memory exceeds this (must be < MAX_MEMORY_CHARS)
+const MAX_MEMORY_CHARS = 16000; // Cap injected memory — generous to fit full dedup lists
+const COMPACTION_THRESHOLD = 10000; // Trigger compaction when memory exceeds this (must be < MAX_MEMORY_CHARS)
 const MEMORY_SUB_AGENT_TIMEOUT_MS = 30_000; // 30 seconds
 const ARCHIVE_DELIMITER = "---ARCHIVE---"; // Separates memory from archive in sub-agent output
 const MAX_ARCHIVE_BYTES = 100_000; // Cap archive at ~100KB to prevent unbounded growth
@@ -169,10 +169,10 @@ export async function updateMemoryAfterRun(opts: {
     "## Compaction Required",
     `The current memory is ${currentMemory.length} characters, which exceeds the ${COMPACTION_THRESHOLD} char budget.`,
     "You MUST compact it:",
-    "- Summarize older individual entries into aggregate summaries (e.g., '47 ingredients analyzed across 6 categories' instead of listing each one).",
-    "- Keep only the 10 most recent items in any list.",
-    "- Drop entries older than 30 days unless still actionable.",
-    "- Move the detailed older entries to the archive section (see output format below).",
+    "- KEEP the complete list of all processed/covered items (names only, no dates, scores, or details). This list is critical for deduplication — never drop items from it.",
+    "- Use a compact CSV format for item lists: `Item A, Item B, Item C` — one line, comma-separated, names only.",
+    "- Aggressively compress everything else: notes, setup details, approaches, working configs.",
+    "- Move verbose details (per-item analysis, dated entries, setup logs) to the archive section.",
     "",
     "## Output Format (compaction mode)",
     "Output the compacted memory.md content first.",
@@ -183,13 +183,14 @@ export async function updateMemoryAfterRun(opts: {
     "Example:",
     "```",
     "## Processed Items (47 total)",
-    "- Recent Item A (2026-03-15)",
-    "- Recent Item B (2026-03-14)",
-    "...",
+    "Quinoa, Chia Seeds, Oat Milk, Tempeh, Spirulina, Kale, Turmeric, Lentils, ...",
+    "",
+    "## Notes",
+    "API: nutrition-api.com/v2, rate limit 10/min",
     `${ARCHIVE_DELIMITER}`,
     "## Archived on 2026-03-16",
-    "- Old Item X (2026-02-01)",
-    "- Old Item Y (2026-02-05)",
+    "- Quinoa (2026-02-01, score 72/100): high fiber, complete protein...",
+    "- Chia Seeds (2026-02-05, score 85/100): omega-3 rich...",
     "```",
   ] : [];
 

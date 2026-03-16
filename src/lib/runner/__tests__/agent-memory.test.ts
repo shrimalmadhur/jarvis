@@ -30,11 +30,13 @@ describe("readWorkspaceMemory", () => {
     expect(readWorkspaceMemory(TEST_WORKSPACE)).toBe("## Topics\n- Apples");
   });
 
-  test("truncates files > 8000 chars", () => {
-    const longContent = "x".repeat(9000);
+  test("truncates files exceeding MAX_MEMORY_CHARS (16000)", () => {
+    const longContent = "x".repeat(20000);
     writeFileSync(join(TEST_WORKSPACE, "memory.md"), longContent);
     const result = readWorkspaceMemory(TEST_WORKSPACE);
-    expect(result.length).toBeLessThan(9000);
+    // 16000 chars of content + truncation suffix (~50 chars)
+    expect(result.length).toBeLessThanOrEqual(16100);
+    expect(result.length).toBeGreaterThan(16000);
     expect(result).toContain("[memory truncated");
   });
 
