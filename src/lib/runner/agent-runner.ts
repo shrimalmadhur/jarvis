@@ -254,15 +254,11 @@ export async function runAgentTask(
 
       const isSuccess = code === 0 || code === null;
 
-      // Prefer resultText (from the `result` event — the agent's final
-      // response).  If it looks like a housekeeping remark rather than the
-      // real deliverable, fall back to the last assistant text block which
-      // is more likely to contain the actual output.
-      const HOUSEKEEPING_RE = /^(memory (updated|saved)|updated memory|done\.?|ok\.?)$/i;
-      let finalOutput = resultText;
-      if ((!finalOutput || HOUSEKEEPING_RE.test(finalOutput.trim())) && assistantTextBlocks.length > 0) {
-        finalOutput = assistantTextBlocks[assistantTextBlocks.length - 1];
-      }
+      // The agent is instructed to update memory BEFORE its final response,
+      // so resultText should be the actual deliverable. Fall back to the
+      // last assistant text block only if resultText is empty (e.g. crash).
+      const finalOutput = resultText
+        || (assistantTextBlocks.length > 0 ? assistantTextBlocks[assistantTextBlocks.length - 1] : "");
 
       resolve({
         agentName: definition.config.name,
