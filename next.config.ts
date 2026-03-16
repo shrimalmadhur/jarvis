@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["better-sqlite3"],
   outputFileTracingExcludes: {
-    "*": ["./data/**"],
+    "*": ["./data/**", "./.claude/**"],
   },
 };
 
