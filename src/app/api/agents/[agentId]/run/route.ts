@@ -6,6 +6,7 @@ import { runAgentTask } from "@/lib/runner/agent-runner";
 import { logRun, getRecentOutputs } from "@/lib/runner/run-log";
 import { getAgentTelegramConfig, sendAgentResult } from "@/lib/runner/telegram-sender";
 import type { AgentDefinition } from "@/lib/runner/types";
+import { startRun, emitRunEvent, endRun } from "@/lib/runner/run-events";
 
 export const maxDuration = 600; // 10 minutes
 
@@ -63,13 +64,37 @@ export async function POST(
     const recentOutputs = await getRecentOutputs(agent.name, 30, agent.id);
 
     runningAgents.add(agentId);
+    startRun(agentId);
+    emitRunEvent(agentId, {
+      type: "started",
+      timestamp: Date.now(),
+      data: { agentName: agent.name },
+    });
 
     let result;
     try {
-      result = await runAgentTask(definition, { recentOutputs });
+      result = await runAgentTask(definition, { recentOutputs }, (event) => {
+        emitRunEvent(agentId, event);
+      });
     } finally {
       runningAgents.delete(agentId);
     }
+
+    emitRunEvent(agentId, {
+      type: "complete",
+      timestamp: Date.now(),
+      data: {
+        success: result.success,
+        output: result.output,
+        model: result.model,
+        promptTokens: result.tokensUsed.prompt,
+        completionTokens: result.tokensUsed.completion,
+        toolUseCount: result.toolUses.length,
+        durationMs: result.durationMs,
+        error: result.error || null,
+      },
+    });
+    endRun(agentId);
 
     // Log the run to DB
     await logRun(result);
@@ -98,6 +123,12 @@ export async function POST(
     });
   } catch (error) {
     runningAgents.delete(agentId);
+    emitRunEvent(agentId, {
+      type: "complete",
+      timestamp: Date.now(),
+      data: { success: false, error: "Failed to run agent" },
+    });
+    endRun(agentId);
     console.error("Error running agent:", error);
     return NextResponse.json(
       { error: "Failed to run agent" },

@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
+import type { RunEvent } from "./run-events";
 
 /**
  * Build the user message from skill + context.
@@ -51,7 +52,8 @@ function buildUserMessage(
  */
 export async function runAgentTask(
   definition: AgentDefinition,
-  context?: { recentOutputs?: string[] }
+  context?: { recentOutputs?: string[] },
+  onEvent?: (event: RunEvent) => void
 ): Promise<RunResult> {
   const startTime = Date.now();
   const userMessage = buildUserMessage(definition, context);
@@ -149,6 +151,20 @@ export async function runAgentTask(
                     input: JSON.stringify(block.input || {}),
                     startTime: Date.now(),
                   });
+                  onEvent?.({
+                    type: "tool_start",
+                    timestamp: Date.now(),
+                    data: {
+                      toolName: block.name,
+                      toolInput: JSON.stringify(block.input || {}).substring(0, 2000),
+                    },
+                  });
+                } else if (block.type === "text" && block.text) {
+                  onEvent?.({
+                    type: "text",
+                    timestamp: Date.now(),
+                    data: { text: block.text },
+                  });
                 }
               }
             }
@@ -170,12 +186,23 @@ export async function runAgentTask(
                         ? block.content.map((c: { text?: string }) => c.text || "").join("")
                         : JSON.stringify(block.content);
 
+                    const toolDurationMs = Date.now() - pending.startTime;
                     toolUses.push({
                       toolName: pending.name,
                       toolInput: pending.input.substring(0, 4000),
                       toolOutput: outputText.substring(0, 4000),
                       isError: block.is_error || false,
-                      durationMs: Date.now() - pending.startTime,
+                      durationMs: toolDurationMs,
+                    });
+                    onEvent?.({
+                      type: "tool_result",
+                      timestamp: Date.now(),
+                      data: {
+                        toolName: pending.name,
+                        toolOutput: outputText.substring(0, 2000),
+                        isError: block.is_error || false,
+                        durationMs: toolDurationMs,
+                      },
                     });
                     pendingTools.delete(block.tool_use_id);
                   }

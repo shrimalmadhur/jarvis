@@ -29,6 +29,7 @@ import { AgentForm } from "@/components/agents/agent-form";
 import type { AgentFormData } from "@/components/agents/agent-form";
 import { cronToHuman } from "@/lib/utils/cron";
 import { MarkdownView } from "@/components/ui/markdown-view";
+import { LiveRunView } from "@/components/agents/live-run-view";
 
 interface AgentDetail {
   id: string;
@@ -526,10 +527,10 @@ export default function AgentDetailPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Check if the agent is already running on mount (survives navigation)
+  // Check if the agent is already running on mount (survives navigation).
+  // Setting running=true causes LiveRunView to connect via SSE, which handles completion.
   useEffect(() => {
     let cancelled = false;
-    const maxPollAttempts = 250; // ~12.5 min at 3s intervals, exceeds 10-min agent timeout
     const checkRunning = async () => {
       try {
         const res = await fetch(`/api/agents/${params.agentId}/run`);
@@ -537,33 +538,13 @@ export default function AgentDetailPage() {
           const data = await res.json();
           if (data.running && !cancelled) {
             setRunning(true);
-            let attempts = 0;
-            const poll = async () => {
-              if (cancelled || ++attempts > maxPollAttempts) {
-                if (!cancelled) setRunning(false);
-                return;
-              }
-              try {
-                const r = await fetch(`/api/agents/${params.agentId}/run`);
-                if (r.ok) {
-                  const d = await r.json();
-                  if (!d.running && !cancelled) {
-                    setRunning(false);
-                    fetchData();
-                    return;
-                  }
-                }
-              } catch { /* retry */ }
-              if (!cancelled) setTimeout(poll, 3000);
-            };
-            setTimeout(poll, 3000);
           }
         }
       } catch { /* ignore */ }
     };
     checkRunning();
     return () => { cancelled = true; };
-  }, [params.agentId, fetchData]);
+  }, [params.agentId]);
 
   const loadMore = useCallback(async () => {
     setLoadingMore(true);
@@ -613,26 +594,27 @@ export default function AgentDetailPage() {
     }
   };
 
+  const handleRunComplete = useCallback(() => {
+    setRunning(false);
+    fetchData();
+  }, [fetchData]);
+
   const handleRunNow = async () => {
     setRunning(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/agents/${params.agentId}/run`, {
-        method: "POST",
+
+    // Fire-and-forget: the SSE stream (LiveRunView) shows progress and
+    // calls onComplete to set running=false and refresh data
+    fetch(`/api/agents/${params.agentId}/run`, { method: "POST" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          setError(data.error || "Agent run failed");
+        }
+      })
+      .catch(() => {
+        // If the fetch was aborted (e.g. user navigated away), that's fine
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || "Agent run failed");
-      }
-      // Refresh data to show the new run in history
-      await fetchData();
-    } catch {
-      // If the fetch was aborted (e.g. user navigated away), that's fine —
-      // the poll-on-mount logic will pick up the running state
-      setError("Failed to run agent");
-    } finally {
-      setRunning(false);
-    }
   };
 
   if (loading) {
@@ -804,6 +786,13 @@ export default function AgentDetailPage() {
         <CollapsibleSection title="Telegram Notifications" icon={Send} iconColor="text-accent" defaultOpen>
           <TelegramSection agentId={agent.id} />
         </CollapsibleSection>
+
+        {/* Live Run Activity */}
+        <LiveRunView
+          agentId={agent.id}
+          running={running}
+          onComplete={handleRunComplete}
+        />
 
         {/* Run History */}
         <div className="animate-fade-in rounded-2xl border border-border bg-surface overflow-hidden">
