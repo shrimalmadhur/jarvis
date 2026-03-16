@@ -186,7 +186,7 @@ export async function updateMemoryAfterRun(opts: {
     "Quinoa, Chia Seeds, Oat Milk, Tempeh, Spirulina, Kale, Turmeric, Lentils, ...",
     "",
     "## Notes",
-    "API: nutrition-api.com/v2, rate limit 10/min",
+    "Key working config and constraints go here",
     `${ARCHIVE_DELIMITER}`,
     "## Archived on 2026-03-16",
     "- Quinoa (2026-02-01, score 72/100): high fiber, complete protein...",
