@@ -3,6 +3,7 @@ import {
   text,
   integer,
   real,
+  index,
 } from "drizzle-orm/sqlite-core";
 
 // ── Conversations ──────────────────────────────────────────────
@@ -142,7 +143,9 @@ export const claudeSessions = sqliteTable("claude_sessions", {
   messageCount: integer("message_count").notNull().default(0),
   isSubagent: integer("is_subagent", { mode: "boolean" }).notNull().default(false),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
-});
+}, (table) => [
+  index("idx_claude_sessions_last_activity").on(table.lastActivity),
+]);
 
 export const claudeSessionTimeline = sqliteTable("claude_session_timeline", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -183,6 +186,14 @@ export const claudeSessionTasks = sqliteTable("claude_session_tasks", {
   subject: text("subject").notNull(),
   status: text("status").notNull(),
   activeForm: text("active_form"),
+});
+
+// ── App Settings (key-value) ──────────────────────────────────
+
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });
 
 // ── Agent Runs ────────────────────────────────────────────────

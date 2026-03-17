@@ -5,7 +5,8 @@ import {
   claudeSessionSubAgents,
   claudeSessionTasks,
 } from "@/lib/db/schema";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, lt } from "drizzle-orm";
+import { getSetting } from "@/lib/db/app-settings";
 import type {
   AgentSession,
   SessionDetailResponse,
@@ -357,4 +358,27 @@ export function loadSessionDetailFromDB(
     subAgents: subagentId ? [] : subAgents,
     tasks: subagentId ? [] : tasks,
   };
+}
+
+// ── Clean up old sessions based on retention setting ─────────
+
+export function cleanupOldSessions(): number {
+  const retentionDays = getSetting("session_retention_days");
+  if (!retentionDays) return 0; // no retention configured = keep forever
+
+  const days = parseInt(retentionDays, 10);
+  if (isNaN(days) || days <= 0) return 0;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffISO = cutoff.toISOString();
+
+  // Delete sessions with lastActivity older than the cutoff.
+  // Cascade will handle timeline, sub-agents, and tasks.
+  const result = db
+    .delete(claudeSessions)
+    .where(lt(claudeSessions.lastActivity, cutoffISO))
+    .run();
+
+  return result.changes;
 }

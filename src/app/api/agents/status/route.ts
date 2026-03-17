@@ -3,8 +3,12 @@ import { scanSessions } from "@/lib/claude/session-reader";
 import {
   persistSessions,
   loadHistoricalSessions,
+  cleanupOldSessions,
 } from "@/lib/claude/session-store";
 import type { AgentSession } from "@/lib/claude/types";
+
+let lastCleanupAt = 0;
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export async function GET() {
   try {
@@ -15,6 +19,16 @@ export async function GET() {
       persistSessions(status.sessions);
     } catch (e) {
       console.error("Failed to persist sessions:", e);
+    }
+
+    // Clean up old sessions based on retention setting (at most once per day)
+    if (Date.now() - lastCleanupAt > CLEANUP_INTERVAL_MS) {
+      lastCleanupAt = Date.now();
+      try {
+        cleanupOldSessions();
+      } catch (e) {
+        console.error("Failed to cleanup old sessions:", e);
+      }
     }
 
     // Merge with historical sessions from DB
