@@ -26,7 +26,7 @@ echo ""
 # ── 1. System packages ─────────────────────────
 echo "Step 1: Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq curl git sqlite3 rsync unzip > /dev/null
+sudo apt-get install -y -qq build-essential python3 curl git sqlite3 rsync unzip > /dev/null
 green "  System packages installed"
 
 # ── 2. Bun runtime ─────────────────────────────
@@ -46,12 +46,21 @@ if command -v node &>/dev/null; then
         yellow "  Node.js $(node -v) is too old (need >= 20), upgrading..."
         curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
         sudo apt-get install -y -qq nodejs > /dev/null
+        hash -r 2>/dev/null || true
+        NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
+        if [ "$NODE_VERSION" -lt 20 ]; then
+            red "Error: Node.js upgrade failed, still at $(node -v)"
+            exit 1
+        fi
+        green "  Node.js upgraded to $(node -v)"
+    else
+        green "  Node.js $(node -v) already installed"
     fi
-    green "  Node.js $(node -v) already installed"
 else
     echo "  Installing Node.js 22..."
     curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
     sudo apt-get install -y -qq nodejs > /dev/null
+    hash -r 2>/dev/null || true
     green "  Node.js $(node -v) installed"
 fi
 

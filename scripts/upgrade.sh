@@ -19,6 +19,21 @@ red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
 
+# --- Ensure sudo access upfront ---
+if ! sudo -n true 2>/dev/null; then
+    echo "This script requires sudo. Please enter your password:"
+    sudo true || { red "Error: sudo access required"; exit 1; }
+fi
+
+# --- Ensure Homebrew is available (macOS) ---
+ensure_homebrew() {
+    if [ "$OS" = "Darwin" ] && ! command -v brew &>/dev/null; then
+        echo "  Installing Homebrew..."
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
+    fi
+}
+
 # --- Install missing system dependencies ---
 echo "Checking system dependencies..."
 
@@ -27,11 +42,7 @@ install_system_packages() {
     if [ ${#missing[@]} -eq 0 ]; then return 0; fi
     echo "  Installing missing packages: ${missing[*]}..."
     if [ "$OS" = "Darwin" ]; then
-        if ! command -v brew &>/dev/null; then
-            echo "  Installing Homebrew..."
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
-        fi
+        ensure_homebrew
         brew install "${missing[@]}"
     elif command -v apt-get &>/dev/null; then
         sudo apt-get update -qq
@@ -54,6 +65,10 @@ for cmd in rsync sqlite3 curl git unzip; do
         MISSING_PKGS+=("$cmd")
     fi
 done
+# Fix package names for non-apt distros (sqlite3 binary is in the "sqlite" package)
+if [ ${#MISSING_PKGS[@]} -gt 0 ] && ! command -v apt-get &>/dev/null; then
+    MISSING_PKGS=("${MISSING_PKGS[@]/sqlite3/sqlite}")
+fi
 if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
     install_system_packages "${MISSING_PKGS[@]}"
 fi
@@ -76,10 +91,7 @@ green "  bun $(bun --version)"
 if ! command -v node &>/dev/null; then
     echo "  Installing Node.js..."
     if [ "$OS" = "Darwin" ]; then
-        if ! command -v brew &>/dev/null; then
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
-        fi
+        ensure_homebrew
         brew install node
     elif command -v apt-get &>/dev/null; then
         curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
@@ -107,6 +119,11 @@ if [ "$NODE_VERSION" -lt 20 ]; then
         sudo dnf install -y -q nodejs > /dev/null
     fi
     hash -r 2>/dev/null || true
+    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
+    if [ "$NODE_VERSION" -lt 20 ]; then
+        red "Error: Node.js upgrade failed, still at $(node -v)"
+        exit 1
+    fi
 fi
 
 NODE_BIN_DIR="$(dirname "$(command -v node)")"
