@@ -95,6 +95,21 @@ If an archive file (\`memory-archive.md\`) is mentioned, you can read it for det
 `;
 
 /**
+ * Universal output rules appended to every agent's system prompt.
+ * Ensures the agent's final response is always the task deliverable,
+ * not housekeeping remarks like "Memory updated" or "Done".
+ */
+export const AGENT_OUTPUT_RULES = `
+
+## Output Rules (enforced by the system)
+- Your response IS the deliverable. The text you output is captured as the run result and may be sent to the user via notifications.
+- Output ONLY the task result — the content your skill asks you to produce (e.g., an article, analysis, report, summary).
+- NEVER end your response with housekeeping remarks like "Memory updated", "Task complete", "Done", or summaries of what you did. These waste the output.
+- If your skill asks you to update files (JSON, databases, etc.) as bookkeeping, do it silently — do not mention it in your output.
+- Do not narrate your process ("First I queried...", "Now I'll..."). Just produce the deliverable.
+`;
+
+/**
  * Extract the ## Memory section from skill text.
  * Returns the section content (without the heading), or null if not found.
  */

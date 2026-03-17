@@ -8,6 +8,7 @@ import {
   hasWorkspaceArchive,
   parseSubAgentOutput,
   MEMORY_CONTEXT_NOTE,
+  AGENT_OUTPUT_RULES,
 } from "../agent-memory";
 
 const TEST_WORKSPACE = join(import.meta.dir, ".tmp-test-workspace");
@@ -144,6 +145,27 @@ describe("MEMORY_CONTEXT_NOTE", () => {
 
   test("references previous runs section", () => {
     expect(MEMORY_CONTEXT_NOTE).toContain("Your Memory (from previous runs)");
+  });
+});
+
+describe("AGENT_OUTPUT_RULES", () => {
+  test("requires response to be the deliverable", () => {
+    expect(AGENT_OUTPUT_RULES.toLowerCase()).toContain("deliverable");
+  });
+
+  test("prohibits housekeeping remarks", () => {
+    const lower = AGENT_OUTPUT_RULES.toLowerCase();
+    expect(lower).toContain("memory updated");
+    expect(lower).toContain("task complete");
+    expect(lower).toContain('"done"');
+  });
+
+  test("prohibits process narration", () => {
+    expect(AGENT_OUTPUT_RULES.toLowerCase()).toContain("do not narrate");
+  });
+
+  test("instructs silent bookkeeping", () => {
+    expect(AGENT_OUTPUT_RULES.toLowerCase()).toContain("silently");
   });
 });
 
