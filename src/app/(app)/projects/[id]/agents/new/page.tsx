@@ -55,7 +55,7 @@ export default function NewAgentPage() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="flex items-center gap-2 text-[13px] font-mono text-muted-foreground">
+        <div className="flex items-center gap-2 text-[14px] font-mono text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
           loading...
         </div>
@@ -66,8 +66,8 @@ export default function NewAgentPage() {
   if (error) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <p className="text-[14px] font-mono text-red">[ERROR] {error}</p>
-        <Link href="/projects" className="text-[13px] font-mono text-accent hover:underline">
+        <p className="text-[15px] font-mono text-red">[ERROR] {error}</p>
+        <Link href="/projects" className="text-[14px] font-mono text-accent hover:underline">
           <ArrowLeft className="inline h-3 w-3 mr-1" />back to projects
         </Link>
       </div>
@@ -77,11 +77,11 @@ export default function NewAgentPage() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="page-header">
-        <div className="px-8 lg:px-12">
+        <div className="px-8 lg:px-16">
           <div className="animate-fade-in">
             <Link
               href={`/projects/${params.id}`}
-              className="inline-flex items-center gap-1.5 text-[13px] font-mono text-muted-foreground hover:text-accent transition-colors group mb-4"
+              className="inline-flex items-center gap-1.5 text-[14px] font-mono text-muted-foreground hover:text-accent transition-colors group mb-4"
             >
               <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
               back
@@ -89,12 +89,12 @@ export default function NewAgentPage() {
 
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-accent text-[15px] glow-text">&gt;&gt;</span>
-                <h1 className="text-[22px] font-bold tracking-widest text-foreground uppercase glow-text">
+                <span className="text-accent text-[16px] glow-text">&gt;&gt;</span>
+                <h1 className="text-[24px] font-bold tracking-widest text-foreground uppercase glow-text">
                   Spawn Agent
                 </h1>
               </div>
-              <p className="text-[13px] font-mono text-muted-foreground mt-1 ml-7">
+              <p className="text-[14px] font-mono text-muted-foreground mt-1 ml-7">
                 // configure a new autonomous agent in {projectName}
               </p>
             </div>
@@ -102,7 +102,7 @@ export default function NewAgentPage() {
         </div>
       </div>
 
-      <div className="px-8 lg:px-12 py-8">
+      <div className="px-8 lg:px-16 py-8">
         <div className="border border-border bg-surface p-6">
           <AgentForm onSubmit={handleSubmit} submitLabel="deploy" />
         </div>

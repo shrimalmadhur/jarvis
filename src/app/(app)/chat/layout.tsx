@@ -42,7 +42,7 @@ export default function ChatLayout({
       {/* Conversations panel */}
       <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-surface">
         <div className="flex items-center justify-between px-3 py-3">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
             Conversations
           </span>
           <Link
@@ -67,7 +67,7 @@ export default function ChatLayout({
                     key={conv.id}
                     href={`/chat/${conv.id}`}
                     className={cn(
-                      "group flex items-center gap-2 truncate rounded-lg px-3 py-2 text-[13px] transition-all duration-150",
+                      "group flex items-center gap-2 truncate rounded-lg px-3 py-2 text-[14px] transition-all duration-150",
                       isActive
                         ? "bg-surface-raised text-foreground"
                         : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"

@@ -21,7 +21,7 @@ export function MarkdownEditor({
   const [tab, setTab] = useState<"write" | "preview">("write");
 
   const tabClass = (active: boolean) =>
-    `px-3 py-1 text-[11px] font-mono uppercase tracking-widest transition-colors ${
+    `px-3 py-1 text-[12px] font-mono uppercase tracking-widest transition-colors ${
       active
         ? "text-accent border-b border-accent"
         : "text-muted hover:text-muted-foreground"
@@ -50,7 +50,7 @@ export function MarkdownEditor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`${inputClassName} min-h-[140px] text-[13px] resize-y ${tab !== "write" ? "hidden" : ""}`}
+        className={`${inputClassName} min-h-[140px] text-[14px] resize-y ${tab !== "write" ? "hidden" : ""}`}
         required={required}
       />
       {tab === "preview" && (
@@ -58,7 +58,7 @@ export function MarkdownEditor({
           {value.trim() ? (
             <MarkdownView content={value} />
           ) : (
-            <p className="text-[13px] text-muted/40 italic font-mono">
+            <p className="text-[14px] text-muted/40 italic font-mono">
               Nothing to preview
             </p>
           )}

@@ -35,16 +35,16 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
-                <span className="text-accent text-[13px]">&gt;</span>
-                <span className="text-[15px] font-bold text-foreground tracking-wide uppercase">
+                <span className="text-accent text-[14px]">&gt;</span>
+                <span className="text-[16px] font-bold text-foreground tracking-wide uppercase">
                   {project.name}
                 </span>
               </div>
-              <span className="text-[11px] text-muted font-mono ml-4">{created}</span>
+              <span className="text-[12px] text-muted font-mono ml-4">{created}</span>
             </div>
             <div className="flex items-center gap-1.5 border border-border px-2 py-0.5">
               <Bot className="h-3 w-3 text-muted-foreground" />
-              <span className="text-[12px] font-mono text-muted-foreground">
+              <span className="text-[13px] font-mono text-muted-foreground">
                 {project.agentCount}
               </span>
             </div>
@@ -52,17 +52,17 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
 
           {/* Description */}
           {project.description && (
-            <p className="text-[13px] leading-relaxed text-muted-foreground line-clamp-2 ml-4 border-l border-border/60 pl-3">
+            <p className="text-[14px] leading-relaxed text-muted-foreground line-clamp-2 ml-4 border-l border-border/60 pl-3">
               {project.description}
             </p>
           )}
 
           {/* Footer */}
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
-            <span className="text-[11px] font-mono text-muted uppercase tracking-wider">
+            <span className="text-[12px] font-mono text-muted uppercase tracking-wider">
               {project.agentCount} {project.agentCount === 1 ? "agent" : "agents"} registered
             </span>
-            <span className="flex items-center gap-1 text-[12px] text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
+            <span className="flex items-center gap-1 text-[13px] text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
               open <ArrowRight className="h-3 w-3" />
             </span>
           </div>
@@ -130,22 +130,22 @@ export default function ProjectsPage() {
     <div className="flex-1 overflow-y-auto">
       {/* Header */}
       <div className="page-header">
-        <div className="px-8 lg:px-12">
+        <div className="px-8 lg:px-16">
           <div className="animate-fade-in flex items-end justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-accent text-[13px] glow-text">&gt;&gt;</span>
-                <h1 className="text-[22px] font-bold tracking-widest text-foreground uppercase glow-text">
+                <span className="text-accent text-[14px] glow-text">&gt;&gt;</span>
+                <h1 className="text-[24px] font-bold tracking-widest text-foreground uppercase glow-text">
                   Projects
                 </h1>
               </div>
-              <p className="text-[13px] text-muted-foreground font-mono ml-6">
+              <p className="text-[14px] text-muted-foreground font-mono ml-6">
                 // autonomous agent workspaces
               </p>
             </div>
             <button
               onClick={() => setShowCreate(!showCreate)}
-              className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[13px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.15)]"
+              className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[14px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.15)]"
             >
               <Plus className="h-3.5 w-3.5" />
               init new
@@ -154,15 +154,15 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      <div className="px-8 lg:px-12 py-8 space-y-6">
+      <div className="px-8 lg:px-16 py-8 space-y-6">
         {/* Create Form */}
         {showCreate && (
           <form
             onSubmit={handleCreate}
-            className="animate-type-in border border-accent/30 bg-surface p-5 space-y-3 max-w-xl"
+            className="animate-type-in border border-accent/30 bg-surface p-5 space-y-3 max-w-2xl"
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[12px] font-mono font-bold text-accent uppercase tracking-widest">
+              <span className="text-[13px] font-mono font-bold text-accent uppercase tracking-widest">
                 &gt; init project
               </span>
               <button type="button" onClick={() => setShowCreate(false)} className="text-muted hover:text-foreground transition-colors">
@@ -170,31 +170,31 @@ export default function ProjectsPage() {
               </button>
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-mono text-muted uppercase tracking-wider">name</label>
+              <label className="text-[12px] font-mono text-muted uppercase tracking-wider">name</label>
               <input
                 type="text"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
                 placeholder="project-name"
-                className="w-full border border-border bg-background px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted/50 outline-none transition-all focus:border-accent input-focus"
+                className="w-full border border-border bg-background px-3 py-2 text-[15px] font-mono text-foreground placeholder:text-muted/50 outline-none transition-all focus:border-accent input-focus"
                 autoFocus
                 required
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-mono text-muted uppercase tracking-wider">description</label>
+              <label className="text-[12px] font-mono text-muted uppercase tracking-wider">description</label>
               <input
                 type="text"
                 value={createDesc}
                 onChange={(e) => setCreateDesc(e.target.value)}
                 placeholder="optional description"
-                className="w-full border border-border bg-background px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted/50 outline-none transition-all focus:border-accent input-focus"
+                className="w-full border border-border bg-background px-3 py-2 text-[15px] font-mono text-foreground placeholder:text-muted/50 outline-none transition-all focus:border-accent input-focus"
               />
             </div>
             <button
               type="submit"
               disabled={creating || !createName.trim()}
-              className="border border-accent bg-accent/10 px-4 py-1.5 text-[12px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/20 disabled:opacity-40"
+              className="border border-accent bg-accent/10 px-4 py-1.5 text-[13px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/20 disabled:opacity-40"
             >
               {creating ? (
                 <span className="flex items-center gap-1.5">
@@ -211,7 +211,7 @@ export default function ProjectsPage() {
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-24">
-            <div className="flex items-center gap-2 text-[13px] font-mono text-muted-foreground">
+            <div className="flex items-center gap-2 text-[14px] font-mono text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
               loading projects...
             </div>
@@ -220,7 +220,7 @@ export default function ProjectsPage() {
 
         {/* Error */}
         {error && (
-          <div className="animate-type-in border border-red/30 bg-red/5 px-4 py-2.5 text-[13px] font-mono text-red max-w-xl">
+          <div className="animate-type-in border border-red/30 bg-red/5 px-4 py-2.5 text-[14px] font-mono text-red max-w-2xl">
             [ERROR] {error}
           </div>
         )}
@@ -228,7 +228,7 @@ export default function ProjectsPage() {
         {/* Empty state */}
         {!loading && !error && projects.length === 0 && !showCreate && (
           <div className="animate-fade-in flex flex-col items-center justify-center py-24 text-center">
-            <div className="text-[13px] font-mono text-muted-foreground space-y-1">
+            <div className="text-[14px] font-mono text-muted-foreground space-y-1">
               <p className="text-muted">$ jarvis --list-projects</p>
               <p className="text-muted-foreground">0 projects found</p>
               <p className="text-muted mt-4">run <span className="text-accent">&quot;init new&quot;</span> to create your first project</p>
@@ -239,7 +239,7 @@ export default function ProjectsPage() {
         {/* Project grid */}
         {projects.length > 0 && (
           <>
-            <div className="text-[11px] font-mono text-muted uppercase tracking-wider">
+            <div className="text-[12px] font-mono text-muted uppercase tracking-wider">
               {projects.length} project{projects.length !== 1 ? "s" : ""} found
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">

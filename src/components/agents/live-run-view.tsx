@@ -40,9 +40,9 @@ function EventItem({ event, startTime }: { event: RunEvent; startTime: number })
             <Play className="h-2.5 w-2.5 text-accent" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-[13px] text-foreground font-medium">Run started</span>
+            <span className="text-[14px] text-foreground font-medium">Run started</span>
           </div>
-          <span className="shrink-0 font-mono text-[11px] text-muted">{relativeTime}</span>
+          <span className="shrink-0 font-mono text-[12px] text-muted">{relativeTime}</span>
         </div>
       );
 
@@ -70,14 +70,14 @@ function EventItem({ event, startTime }: { event: RunEvent; startTime: number })
             <Wrench className="h-2.5 w-2.5 text-accent animate-pulse" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="font-mono text-[13px] text-accent font-medium">{toolName}</span>
+            <span className="font-mono text-[14px] text-accent font-medium">{toolName}</span>
             {inputSummary && (
-              <p className="mt-0.5 truncate font-mono text-[12px] text-muted-foreground">
+              <p className="mt-0.5 truncate font-mono text-[13px] text-muted-foreground">
                 {inputSummary}
               </p>
             )}
           </div>
-          <span className="shrink-0 font-mono text-[11px] text-muted">{relativeTime}</span>
+          <span className="shrink-0 font-mono text-[12px] text-muted">{relativeTime}</span>
         </div>
       );
     }
@@ -102,19 +102,19 @@ function EventItem({ event, startTime }: { event: RunEvent; startTime: number })
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className={cn(
-                "font-mono text-[13px] font-medium",
+                "font-mono text-[14px] font-medium",
                 isError ? "text-red" : "text-green"
               )}>
                 {toolName}
               </span>
               {durationMs != null && (
-                <span className="font-mono text-[11px] text-muted">
+                <span className="font-mono text-[12px] text-muted">
                   {durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}
                 </span>
               )}
             </div>
           </div>
-          <span className="shrink-0 font-mono text-[11px] text-muted">{relativeTime}</span>
+          <span className="shrink-0 font-mono text-[12px] text-muted">{relativeTime}</span>
         </div>
       );
     }
@@ -127,11 +127,11 @@ function EventItem({ event, startTime }: { event: RunEvent; startTime: number })
             <MessageSquare className="h-2.5 w-2.5 text-accent" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] leading-relaxed text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+            <p className="text-[14px] leading-relaxed text-muted-foreground line-clamp-4 whitespace-pre-wrap">
               {text}
             </p>
           </div>
-          <span className="shrink-0 font-mono text-[11px] text-muted">{relativeTime}</span>
+          <span className="shrink-0 font-mono text-[12px] text-muted">{relativeTime}</span>
         </div>
       );
     }
@@ -158,17 +158,17 @@ function EventItem({ event, startTime }: { event: RunEvent; startTime: number })
           </div>
           <div className="min-w-0 flex-1">
             <span className={cn(
-              "text-[13px] font-medium",
+              "text-[14px] font-medium",
               success ? "text-green" : "text-red"
             )}>
               {success ? "Run completed" : "Run failed"}
             </span>
-            <div className="mt-0.5 flex items-center gap-3 text-[12px] text-muted">
+            <div className="mt-0.5 flex items-center gap-3 text-[13px] text-muted">
               {duration && <span className="font-mono">{duration}</span>}
               {(toolUseCount ?? 0) > 0 && <span>{toolUseCount} tools used</span>}
             </div>
           </div>
-          <span className="shrink-0 font-mono text-[11px] text-muted">{relativeTime}</span>
+          <span className="shrink-0 font-mono text-[12px] text-muted">{relativeTime}</span>
         </div>
       );
     }
@@ -258,11 +258,11 @@ export function LiveRunView({ agentId, running, onComplete }: LiveRunViewProps) 
         ) : isComplete ? (
           <Check className="h-4 w-4 text-green" />
         ) : null}
-        <span className="text-[14px] font-bold uppercase tracking-[0.15em] text-accent">
+        <span className="text-[15px] font-bold uppercase tracking-[0.15em] text-accent">
           {running && !isComplete ? "Live Activity" : "Run Complete"}
         </span>
         <div className="flex-1" />
-        <div className="flex items-center gap-3 text-[12px] text-muted">
+        <div className="flex items-center gap-3 text-[13px] text-muted">
           {toolCount > 0 && (
             <span className="flex items-center gap-1">
               <Wrench className="h-3 w-3" />
@@ -287,7 +287,7 @@ export function LiveRunView({ agentId, running, onComplete }: LiveRunViewProps) 
         {events.length === 0 && running && (
           <div className="flex items-center gap-2 px-4 py-6 justify-center">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" />
-            <span className="text-[13px] text-muted">Connecting to agent...</span>
+            <span className="text-[14px] text-muted">Connecting to agent...</span>
           </div>
         )}
         {events.map((event, idx) => (

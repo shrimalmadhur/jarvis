@@ -84,7 +84,7 @@ function CollapsibleSection({
     <div className="border border-border bg-surface overflow-hidden term-card">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2.5 px-5 py-3 text-[12px] font-mono font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
+        className="flex w-full items-center gap-2.5 px-5 py-3 text-[13px] font-mono font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
       >
         <span className="text-accent">{open ? "[-]" : "[+]"}</span>
         <Icon className={cn("h-3.5 w-3.5", iconColor)} />
@@ -139,11 +139,11 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[13px]">
+          <div className="flex items-center gap-2 text-[14px]">
             <span className="text-foreground font-medium">{time}</span>
             {timeAgo && <span className="text-muted">{timeAgo}</span>}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-muted">
             {duration && <span className="font-mono">{duration}</span>}
             {tokens > 0 && (
               <span className="flex items-center gap-1 font-mono">
@@ -159,7 +159,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
             )}
           </div>
           {!expanded && run.output && (
-            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
+            <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground line-clamp-2">
               {run.output}
             </p>
           )}
@@ -177,8 +177,8 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
         <div className="px-4 pb-4 pl-12 space-y-3">
           {run.error && (
             <div className="rounded-lg border border-red/20 bg-red/5 px-3 py-2">
-              <p className="text-[13px] font-medium text-red">Error</p>
-              <p className="mt-1 font-mono text-[13px] leading-relaxed text-red/80">
+              <p className="text-[14px] font-medium text-red">Error</p>
+              <p className="mt-1 font-mono text-[14px] leading-relaxed text-red/80">
                 {run.error}
               </p>
             </div>
@@ -201,7 +201,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
                     setLoadingTools(false);
                   }
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="flex w-full items-center gap-2 px-3 py-2 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Wrench className="h-3 w-3" />
                 Tool Log ({run.toolUseCount})
@@ -212,7 +212,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
               {toolUses && (
                 <div className="border-t border-border/30">
                   {toolUses.map((tu, i) => (
-                    <div key={tu.id} className={cn("px-3 py-2 text-[12px]", i > 0 && "border-t border-border/20")}>
+                    <div key={tu.id} className={cn("px-3 py-2 text-[13px]", i > 0 && "border-t border-border/20")}>
                       <div className="flex items-center gap-2">
                         <span className={cn("font-mono font-medium", tu.isError ? "text-red" : "text-accent")}>
                           {tu.toolName}
@@ -221,13 +221,13 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
                           <span className="font-mono text-muted">{tu.durationMs}ms</span>
                         )}
                         {tu.isError && (
-                          <span className="rounded bg-red/10 px-1 py-0.5 text-[8px] font-bold text-red">ERROR</span>
+                          <span className="rounded bg-red/10 px-1 py-0.5 text-[9px] font-bold text-red">ERROR</span>
                         )}
                       </div>
                       {tu.toolInput && (
                         <details className="mt-1">
                           <summary className="cursor-pointer text-muted hover:text-muted-foreground">Input</summary>
-                          <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-muted-foreground bg-surface-raised rounded p-1.5 max-h-[200px] overflow-auto">
+                          <pre className="mt-1 whitespace-pre-wrap font-mono text-[12px] text-muted-foreground bg-surface-raised rounded p-1.5 max-h-[200px] overflow-auto">
                             {tu.toolInput}
                           </pre>
                         </details>
@@ -235,7 +235,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
                       {tu.toolOutput && (
                         <details className="mt-1">
                           <summary className="cursor-pointer text-muted hover:text-muted-foreground">Output</summary>
-                          <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-muted-foreground bg-surface-raised rounded p-1.5 max-h-[200px] overflow-auto">
+                          <pre className="mt-1 whitespace-pre-wrap font-mono text-[12px] text-muted-foreground bg-surface-raised rounded p-1.5 max-h-[200px] overflow-auto">
                             {tu.toolOutput}
                           </pre>
                         </details>
@@ -249,7 +249,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
 
           {run.output && (
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
-              <pre className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-muted-foreground">
+              <pre className="whitespace-pre-wrap font-mono text-[14px] leading-relaxed text-muted-foreground">
                 {run.output}
               </pre>
             </div>
@@ -271,7 +271,7 @@ interface TelegramConfigData {
 type SetupPhase = "idle" | "validating" | "polling" | "manual" | "found" | "saving";
 
 const inputClasses =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-[14px] text-foreground placeholder:text-muted outline-none transition-colors focus:border-accent/50 font-mono";
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-[15px] text-foreground placeholder:text-muted outline-none transition-colors focus:border-accent/50 font-mono";
 
 function TelegramSection({ agentId }: { agentId: string }) {
   const [config, setConfig] = useState<TelegramConfigData | null>(null);
@@ -418,22 +418,22 @@ function TelegramSection({ agentId }: { agentId: string }) {
       <div className="space-y-3">
         <div className="flex items-center gap-2 rounded-lg border border-green/20 bg-green/5 px-3 py-2">
           <Check className="h-3.5 w-3.5 text-green" />
-          <span className="text-[13px] text-green">Connected{config.botName ? ` to ${config.botName}` : ""}</span>
+          <span className="text-[14px] text-green">Connected{config.botName ? ` to ${config.botName}` : ""}</span>
         </div>
-        <div className="space-y-2 text-[13px]">
+        <div className="space-y-2 text-[14px]">
           <div className="flex items-center justify-between"><span className="text-muted">Bot Token</span><span className="font-mono text-muted-foreground">{config.botToken}</span></div>
           <div className="flex items-center justify-between"><span className="text-muted">Chat ID</span><span className="font-mono text-muted-foreground">{config.chatId}</span></div>
         </div>
         {testResult && (
-          <div className={cn("rounded-lg border px-3 py-2 text-[13px]", testResult.success ? "border-green/20 bg-green/5 text-green" : "border-red/20 bg-red/5 text-red")}>
+          <div className={cn("rounded-lg border px-3 py-2 text-[14px]", testResult.success ? "border-green/20 bg-green/5 text-green" : "border-red/20 bg-red/5 text-red")}>
             {testResult.success ? "Test message sent successfully" : `Test failed: ${testResult.error}`}
           </div>
         )}
         <div className="flex gap-2">
-          <button onClick={handleTest} disabled={testing} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-border-hover hover:text-foreground disabled:opacity-50">
+          <button onClick={handleTest} disabled={testing} className="rounded-lg border border-border px-3 py-1.5 text-[14px] font-medium text-muted-foreground transition-colors hover:border-border-hover hover:text-foreground disabled:opacity-50">
             {testing ? "Testing..." : "Test"}
           </button>
-          <button onClick={handleRemove} className="rounded-lg border border-red/20 px-3 py-1.5 text-[13px] font-medium text-red/70 transition-colors hover:bg-red/5 hover:text-red">
+          <button onClick={handleRemove} className="rounded-lg border border-red/20 px-3 py-1.5 text-[14px] font-medium text-red/70 transition-colors hover:bg-red/5 hover:text-red">
             <Trash2 className="inline h-3 w-3 mr-1" />Remove
           </button>
         </div>
@@ -445,48 +445,48 @@ function TelegramSection({ agentId }: { agentId: string }) {
     <div className="space-y-3">
       {(phase === "idle" || phase === "validating") && (
         <div className="space-y-2">
-          <label className="block text-[13px] text-muted">Bot Token</label>
+          <label className="block text-[14px] text-muted">Bot Token</label>
           <input type="password" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder="123456:ABC-DEFGhijklmnop..." className={inputClasses} disabled={phase === "validating"} />
-          <p className="text-[12px] text-muted">Create a bot via <span className="font-medium text-muted-foreground">@BotFather</span> on Telegram, then paste the token here.</p>
-          <button onClick={handleValidate} disabled={!botToken.trim() || phase === "validating"} className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">
+          <p className="text-[13px] text-muted">Create a bot via <span className="font-medium text-muted-foreground">@BotFather</span> on Telegram, then paste the token here.</p>
+          <button onClick={handleValidate} disabled={!botToken.trim() || phase === "validating"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">
             {phase === "validating" ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Validating...</span> : "Connect"}
           </button>
         </div>
       )}
       {phase === "polling" && botInfo && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2"><Check className="h-3.5 w-3.5 text-accent" /><span className="text-[13px] text-accent">Connected to @{botInfo.botUsername || botInfo.botName}</span></div>
+          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2"><Check className="h-3.5 w-3.5 text-accent" /><span className="text-[14px] text-accent">Connected to @{botInfo.botUsername || botInfo.botName}</span></div>
           <div className="rounded-lg border border-border bg-surface-raised px-3 py-3 space-y-2">
-            <div className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-accent" /><span className="text-[13px] font-medium text-foreground">Waiting for your message...</span></div>
-            <p className="text-[12px] text-muted leading-relaxed">Open Telegram and send <code className="rounded bg-background px-1 py-0.5 text-accent">/start</code> to <span className="font-medium text-muted-foreground">@{botInfo.botUsername || botInfo.botName}</span></p>
+            <div className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-accent" /><span className="text-[14px] font-medium text-foreground">Waiting for your message...</span></div>
+            <p className="text-[13px] text-muted leading-relaxed">Open Telegram and send <code className="rounded bg-background px-1 py-0.5 text-accent">/start</code> to <span className="font-medium text-muted-foreground">@{botInfo.botUsername || botInfo.botName}</span></p>
           </div>
-          <button onClick={() => { setPhase("idle"); setBotInfo(null); }} className="text-[12px] text-muted hover:text-muted-foreground transition-colors"><X className="inline h-3 w-3 mr-0.5" />Cancel</button>
+          <button onClick={() => { setPhase("idle"); setBotInfo(null); }} className="text-[13px] text-muted hover:text-muted-foreground transition-colors"><X className="inline h-3 w-3 mr-0.5" />Cancel</button>
         </div>
       )}
       {phase === "manual" && botInfo && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2"><Check className="h-3.5 w-3.5 text-accent" /><span className="text-[13px] text-accent">Connected to @{botInfo.botUsername || botInfo.botName}</span></div>
-          <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2"><p className="text-[12px] text-yellow-600 dark:text-yellow-400">Could not auto-detect chat ID. Enter it manually below.</p></div>
-          <div className="space-y-2"><label className="block text-[13px] text-muted">Chat ID</label><input type="text" value={manualChatId} onChange={(e) => setManualChatId(e.target.value)} placeholder="-100123456789" className={inputClasses} /></div>
+          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2"><Check className="h-3.5 w-3.5 text-accent" /><span className="text-[14px] text-accent">Connected to @{botInfo.botUsername || botInfo.botName}</span></div>
+          <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2"><p className="text-[13px] text-yellow-600 dark:text-yellow-400">Could not auto-detect chat ID. Enter it manually below.</p></div>
+          <div className="space-y-2"><label className="block text-[14px] text-muted">Chat ID</label><input type="text" value={manualChatId} onChange={(e) => setManualChatId(e.target.value)} placeholder="-100123456789" className={inputClasses} /></div>
           <div className="flex gap-2">
-            <button onClick={() => handleSave(manualChatId)} disabled={!manualChatId.trim()} className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">Save</button>
-            <button onClick={() => { setPhase("idle"); setBotInfo(null); setManualChatId(""); }} className="text-[12px] text-muted hover:text-muted-foreground transition-colors">Cancel</button>
+            <button onClick={() => handleSave(manualChatId)} disabled={!manualChatId.trim()} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">Save</button>
+            <button onClick={() => { setPhase("idle"); setBotInfo(null); setManualChatId(""); }} className="text-[13px] text-muted hover:text-muted-foreground transition-colors">Cancel</button>
           </div>
         </div>
       )}
       {(phase === "found" || phase === "saving") && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg border border-green/20 bg-green/5 px-3 py-2"><Check className="h-3.5 w-3.5 text-green" /><span className="text-[13px] text-green">Chat found{chatTitle ? `: ${chatTitle}` : ""}</span></div>
-          <div className="space-y-1 text-[13px]">
+          <div className="flex items-center gap-2 rounded-lg border border-green/20 bg-green/5 px-3 py-2"><Check className="h-3.5 w-3.5 text-green" /><span className="text-[14px] text-green">Chat found{chatTitle ? `: ${chatTitle}` : ""}</span></div>
+          <div className="space-y-1 text-[14px]">
             <div className="flex items-center justify-between"><span className="text-muted">Bot</span><span className="font-mono text-muted-foreground">@{botInfo?.botUsername || botInfo?.botName}</span></div>
             <div className="flex items-center justify-between"><span className="text-muted">Chat ID</span><span className="font-mono text-muted-foreground">{chatId}</span></div>
           </div>
-          <button onClick={() => handleSave()} disabled={phase === "saving"} className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">
+          <button onClick={() => handleSave()} disabled={phase === "saving"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">
             {phase === "saving" ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Saving...</span> : "Save & Test"}
           </button>
         </div>
       )}
-      {error && <div className="rounded-lg border border-red/20 bg-red/5 px-3 py-2 text-[13px] text-red">{error}</div>}
+      {error && <div className="rounded-lg border border-red/20 bg-red/5 px-3 py-2 text-[14px] text-red">{error}</div>}
     </div>
   );
 }
@@ -635,8 +635,8 @@ export default function AgentDetailPage() {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface border border-border">
           <AlertCircle className="h-6 w-6 text-muted" />
         </div>
-        <p className="text-[16px] text-muted-foreground">{error || "Agent not found"}</p>
-        <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-[14px] text-accent transition-colors hover:text-accent-dim">
+        <p className="text-[17px] text-muted-foreground">{error || "Agent not found"}</p>
+        <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-[15px] text-accent transition-colors hover:text-accent-dim">
           <ArrowLeft className="h-3 w-3" />Back to Project
         </Link>
       </div>
@@ -647,11 +647,11 @@ export default function AgentDetailPage() {
     return (
       <div className="flex-1 overflow-y-auto">
         <div className="page-header grid-pattern">
-          <div className="px-8 lg:px-12">
+          <div className="px-8 lg:px-16">
             <div className="animate-fade-in">
               <button
                 onClick={() => setEditMode(false)}
-                className="inline-flex items-center gap-1.5 text-[14px] text-muted-foreground transition-colors hover:text-foreground group mb-5"
+                className="inline-flex items-center gap-1.5 text-[15px] text-muted-foreground transition-colors hover:text-foreground group mb-5"
               >
                 <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
                 Cancel editing
@@ -662,13 +662,13 @@ export default function AgentDetailPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight text-foreground">Edit Agent</h1>
-                  <p className="text-[15px] text-muted-foreground">{agent.name}</p>
+                  <p className="text-[16px] text-muted-foreground">{agent.name}</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <div className="px-8 lg:px-12 py-8">
+        <div className="px-8 lg:px-16 py-8">
           <div className="rounded-2xl border border-border bg-surface p-8">
             <AgentForm
               initialValues={{
@@ -693,11 +693,11 @@ export default function AgentDetailPage() {
     <div className="flex-1 overflow-y-auto">
       {/* Hero header */}
       <div className="page-header grid-pattern">
-        <div className="px-8 lg:px-12">
+        <div className="px-8 lg:px-16">
           <div className="animate-fade-in">
             <Link
               href={`/projects/${params.id}`}
-              className="inline-flex items-center gap-1.5 text-[14px] text-muted-foreground transition-colors hover:text-foreground group mb-5"
+              className="inline-flex items-center gap-1.5 text-[15px] text-muted-foreground transition-colors hover:text-foreground group mb-5"
             >
               <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
               Back to Project
@@ -713,7 +713,7 @@ export default function AgentDetailPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-bold uppercase tracking-[0.1em]",
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-bold uppercase tracking-[0.1em]",
                     agent.enabled ? "border-green/20 bg-green/8 text-green" : "border-border bg-surface-raised text-muted"
                   )}>
                     <span className={cn("h-1.5 w-1.5 rounded-full", agent.enabled ? "bg-green status-dot-live" : "bg-muted")} />
@@ -722,7 +722,7 @@ export default function AgentDetailPage() {
                   <button
                     onClick={handleRunNow}
                     disabled={running}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-[13px] font-medium text-accent transition-colors hover:bg-accent/20 hover:border-accent/40 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-[14px] font-medium text-accent transition-colors hover:bg-accent/20 hover:border-accent/40 disabled:opacity-50"
                     title="Run Now"
                   >
                     {running ? (
@@ -737,8 +737,8 @@ export default function AgentDetailPage() {
                   </button>
                   {confirmDelete ? (
                     <div className="flex items-center gap-2">
-                      <button onClick={handleDelete} disabled={deleting} className="rounded-xl bg-red/10 border border-red/20 px-3 py-1.5 text-[13px] font-medium text-red hover:bg-red/20 disabled:opacity-50">{deleting ? "..." : "Delete"}</button>
-                      <button onClick={() => setConfirmDelete(false)} className="text-[13px] text-muted hover:text-foreground">Cancel</button>
+                      <button onClick={handleDelete} disabled={deleting} className="rounded-xl bg-red/10 border border-red/20 px-3 py-1.5 text-[14px] font-medium text-red hover:bg-red/20 disabled:opacity-50">{deleting ? "..." : "Delete"}</button>
+                      <button onClick={() => setConfirmDelete(false)} className="text-[14px] text-muted hover:text-foreground">Cancel</button>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmDelete(true)} className="rounded-xl border border-red/20 p-2.5 text-red/50 transition-colors hover:text-red hover:bg-red/5" title="Delete">
@@ -749,7 +749,7 @@ export default function AgentDetailPage() {
               </div>
 
               {/* Meta tags */}
-              <div className="flex flex-wrap items-center gap-2 ml-[56px] text-[13px]">
+              <div className="flex flex-wrap items-center gap-2 ml-[56px] text-[14px]">
                 <span className="flex items-center gap-1.5 rounded-lg bg-surface-raised px-2.5 py-1 text-muted-foreground">
                   <Clock className="h-3.5 w-3.5 text-muted" />{cronToHuman(agent.schedule)}
                 </span>
@@ -763,14 +763,14 @@ export default function AgentDetailPage() {
                     <Key className="h-3.5 w-3.5 text-muted" />{Object.keys(agent.envVars).length} env vars
                   </span>
                 )}
-                <span className="rounded-lg bg-accent/8 border border-accent/15 px-2.5 py-1 text-[12px] font-medium text-accent">Claude CLI</span>
+                <span className="rounded-lg bg-accent/8 border border-accent/15 px-2.5 py-1 text-[13px] font-medium text-accent">Claude CLI</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-8 lg:px-12 py-8 space-y-6">
+      <div className="px-8 lg:px-16 py-8 space-y-6">
         {/* Two-column layout for Soul/Skill + Telegram */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CollapsibleSection title="Personality (Soul)" icon={Bot} iconColor="text-accent">
@@ -798,13 +798,13 @@ export default function AgentDetailPage() {
         <div className="animate-fade-in rounded-2xl border border-border bg-surface overflow-hidden">
           <div className="flex items-center gap-2.5 px-5 py-3.5">
             <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-[14px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Run History</span>
-            <span className="rounded-full bg-accent/10 border border-accent/15 px-2.5 py-0.5 font-mono text-[13px] font-medium text-accent">{totalRuns}</span>
+            <span className="text-[15px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Run History</span>
+            <span className="rounded-full bg-accent/10 border border-accent/15 px-2.5 py-0.5 font-mono text-[14px] font-medium text-accent">{totalRuns}</span>
           </div>
 
           {runs.length === 0 ? (
             <div className="border-t border-border/40 px-5 py-10 text-center">
-              <p className="text-[15px] text-muted">No runs recorded yet</p>
+              <p className="text-[16px] text-muted">No runs recorded yet</p>
             </div>
           ) : (
             <div className="border-t border-border/40">
@@ -819,7 +819,7 @@ export default function AgentDetailPage() {
               <button
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="w-full rounded-xl border border-border px-4 py-2.5 text-[14px] font-medium text-muted-foreground transition-colors hover:border-border-hover hover:text-foreground disabled:opacity-50"
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-[15px] font-medium text-muted-foreground transition-colors hover:border-border-hover hover:text-foreground disabled:opacity-50"
               >
                 {loadingMore ? "Loading..." : `Load More (${totalRuns - runs.length} remaining)`}
               </button>

@@ -23,9 +23,9 @@ interface AgentFormProps {
 }
 
 const inputClasses =
-  "w-full border border-border bg-background px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted/40 outline-none transition-all focus:border-accent input-focus";
+  "w-full border border-border bg-background px-3 py-2 text-[15px] font-mono text-foreground placeholder:text-muted/40 outline-none transition-all focus:border-accent input-focus";
 
-const labelClasses = "block text-[11px] font-mono text-muted uppercase tracking-widest mb-1";
+const labelClasses = "block text-[12px] font-mono text-muted uppercase tracking-widest mb-1";
 
 type EnvVarEntry = { key: string; value: string };
 
@@ -108,7 +108,7 @@ function EnvVarsEditor({
       <button
         type="button"
         onClick={addVar}
-        className="flex items-center gap-1.5 border border-dashed border-border px-3 py-1.5 text-[12px] font-mono text-muted-foreground hover:border-accent/30 hover:text-accent transition-colors"
+        className="flex items-center gap-1.5 border border-dashed border-border px-3 py-1.5 text-[13px] font-mono text-muted-foreground hover:border-accent/30 hover:text-accent transition-colors"
       >
         <Plus className="h-3 w-3" />
         add variable
@@ -151,7 +151,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="border border-red/30 bg-red/5 px-3 py-2 text-[13px] font-mono text-red">
+        <div className="border border-red/30 bg-red/5 px-3 py-2 text-[14px] font-mono text-red">
           [ERROR] {error}
         </div>
       )}
@@ -170,7 +170,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
           />
         </div>
         <div className="flex items-end pb-1">
-          <label className="flex items-center gap-2 text-[12px] font-mono text-muted-foreground cursor-pointer">
+          <label className="flex items-center gap-2 text-[13px] font-mono text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
               checked={form.enabled}
@@ -218,7 +218,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
             className={inputClasses}
             required
           />
-          <p className="mt-1 text-[11px] font-mono text-accent/60">
+          <p className="mt-1 text-[12px] font-mono text-accent/60">
             {cronToHuman(form.schedule)}
           </p>
         </div>
@@ -237,7 +237,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
       {/* Environment Variables */}
       <div>
         <label className={labelClasses}>env vars // credentials</label>
-        <p className="text-[11px] font-mono text-muted mb-2">
+        <p className="text-[12px] font-mono text-muted mb-2">
           api keys and secrets injected at runtime
         </p>
         <EnvVarsEditor
@@ -251,7 +251,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
         <button
           type="submit"
           disabled={submitting}
-          className="border border-accent bg-accent/10 px-5 py-2 text-[13px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/20 hover:shadow-[0_0_12px_rgba(124,58,237,0.15)] disabled:opacity-40"
+          className="border border-accent bg-accent/10 px-5 py-2 text-[14px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/20 hover:shadow-[0_0_12px_rgba(124,58,237,0.15)] disabled:opacity-40"
         >
           {submitting ? (
             <span className="flex items-center gap-1.5">
@@ -266,7 +266,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
           <button
             type="button"
             onClick={() => setShowClaude(true)}
-            className="flex items-center gap-1.5 border border-accent/30 px-4 py-2 text-[13px] font-mono text-accent/70 transition-all hover:border-accent hover:text-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.1)]"
+            className="flex items-center gap-1.5 border border-accent/30 px-4 py-2 text-[14px] font-mono text-accent/70 transition-all hover:border-accent hover:text-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.1)]"
           >
             <Sparkles className="h-3.5 w-3.5" />
             ask claude

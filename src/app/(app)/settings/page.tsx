@@ -369,7 +369,7 @@ export default function SettingsPage() {
   const installedNames = new Set(servers.map((s) => s.name));
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 lg:px-12 py-8">
+    <div className="flex-1 overflow-y-auto px-8 lg:px-16 py-8">
       <div className="space-y-8">
         <div className="animate-fade-in">
           <h1 className="text-xl font-semibold text-foreground">Settings</h1>
@@ -401,7 +401,7 @@ export default function SettingsPage() {
                         {server.name}
                       </span>
                     </div>
-                    <p className="mt-0.5 pl-4 font-mono text-[11px] text-muted">
+                    <p className="mt-0.5 pl-4 font-mono text-[12px] text-muted">
                       {server.command} {(server.args || []).join(" ")}
                     </p>
                   </div>
@@ -479,14 +479,14 @@ export default function SettingsPage() {
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-medium text-foreground">
+                          <span className="text-[14px] font-medium text-foreground">
                             {preset.name}
                           </span>
                           {installed && (
                             <Check className="h-3 w-3 text-green" />
                           )}
                         </div>
-                        <p className="mt-0.5 text-[11px] leading-snug text-muted">
+                        <p className="mt-0.5 text-[12px] leading-snug text-muted">
                           {preset.description}
                         </p>
                       </div>
@@ -497,7 +497,7 @@ export default function SettingsPage() {
                       <div className="animate-fade-in mt-2 space-y-2.5 rounded-lg border border-border bg-surface-raised p-3">
                         {preset.envKeys.map((ek) => (
                           <div key={ek.key}>
-                            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                            <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
                               {ek.label}
                             </label>
                             <input
@@ -621,7 +621,7 @@ export default function SettingsPage() {
               <Send className="h-4.5 w-4.5 text-muted-foreground" />
               <div>
                 <span className="text-sm font-medium text-foreground">Telegram</span>
-                <p className="text-[11px] text-muted">
+                <p className="text-[12px] text-muted">
                   Send a summary when conversations complete
                 </p>
               </div>
@@ -635,7 +635,7 @@ export default function SettingsPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
                   Bot Token
                 </label>
                 <input
@@ -649,7 +649,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
                   Chat ID
                 </label>
                 <input
@@ -712,12 +712,12 @@ export default function SettingsPage() {
           <CardContent>
             <p className="text-sm text-muted-foreground">
               Set your preferred LLM by adding API keys to your{" "}
-              <code className="rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[11px] text-accent">
+              <code className="rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[12px] text-accent">
                 .env.local
               </code>{" "}
               file:
             </p>
-            <div className="mt-3 space-y-1 rounded-lg bg-background p-3.5 font-mono text-[12px] text-muted-foreground">
+            <div className="mt-3 space-y-1 rounded-lg bg-background p-3.5 font-mono text-[13px] text-muted-foreground">
               <div>
                 <span className="text-accent">GEMINI_API_KEY</span>
                 <span className="text-muted">=your-key-here</span>

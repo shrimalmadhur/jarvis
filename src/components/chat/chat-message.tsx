@@ -15,34 +15,34 @@ export function ChatMessage({ role, content, model }: ChatMessageProps) {
   return (
     <div
       className={cn(
-        "animate-fade-in flex gap-3",
+        "animate-fade-in flex gap-4",
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
       {/* Avatar */}
       <div
         className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
           isUser
             ? "bg-accent/15 text-accent"
-            : "bg-surface-raised text-muted-foreground"
+            : "bg-surface-raised border border-border text-muted-foreground"
         )}
       >
-        {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
 
       {/* Bubble */}
       <div
         className={cn(
-          "max-w-[75%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed",
+          "max-w-[85%] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed",
           isUser
-            ? "rounded-tr-md bg-user-bubble text-user-bubble-text"
-            : "rounded-tl-md bg-assistant-bubble text-assistant-bubble-text"
+            ? "rounded-tr-lg bg-user-bubble text-user-bubble-text shadow-sm shadow-accent/10"
+            : "rounded-tl-lg bg-assistant-bubble text-assistant-bubble-text border border-border/50"
         )}
       >
         <div className="whitespace-pre-wrap">{content}</div>
         {!isUser && model && (
-          <div className="mt-2 font-mono text-[10px] tracking-wide text-muted">
+          <div className="mt-2.5 font-mono text-[12px] tracking-wide text-muted">
             {model}
           </div>
         )}

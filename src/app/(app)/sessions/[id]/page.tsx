@@ -409,7 +409,7 @@ export default function SessionDetailPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 lg:px-12 py-8 space-y-6">
+      <div className="px-8 lg:px-16 py-8 space-y-6">
         {/* Back link + header */}
         <div className="animate-fade-in space-y-4">
           <Link

@@ -34,10 +34,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
               variant === "accent",
           },
           {
-            "h-9 px-4 py-2": size === "default",
-            "h-8 rounded-lg px-3 text-xs": size === "sm",
-            "h-10 rounded-lg px-6": size === "lg",
-            "h-9 w-9": size === "icon",
+            "h-10 px-5 py-2.5": size === "default",
+            "h-9 rounded-lg px-4 text-sm": size === "sm",
+            "h-11 rounded-lg px-7 text-base": size === "lg",
+            "h-10 w-10": size === "icon",
           },
           className
         )}

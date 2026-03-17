@@ -70,14 +70,14 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-accent text-[13px]">&gt;</span>
-              <span className="text-[15px] font-bold text-foreground tracking-wide uppercase">
+              <span className="text-accent text-[14px]">&gt;</span>
+              <span className="text-[16px] font-bold text-foreground tracking-wide uppercase">
                 {agent.name}
               </span>
             </div>
             <span
               className={cn(
-                "flex items-center gap-1.5 border px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider",
+                "flex items-center gap-1.5 border px-2 py-0.5 text-[12px] font-mono uppercase tracking-wider",
                 agent.enabled
                   ? "border-green/30 text-green"
                   : "border-border text-muted"
@@ -89,12 +89,12 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
           </div>
 
           {/* Soul excerpt */}
-          <p className="text-[13px] leading-relaxed text-muted-foreground line-clamp-2 ml-4 border-l border-border/60 pl-3">
+          <p className="text-[14px] leading-relaxed text-muted-foreground line-clamp-2 ml-4 border-l border-border/60 pl-3">
             {agent.soulExcerpt}
           </p>
 
           {/* Meta */}
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+          <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-mono">
             <span className="flex items-center gap-1 border border-border px-1.5 py-0.5 text-muted-foreground">
               <Clock className="h-2.5 w-2.5 text-muted" />
               {agent.scheduleHuman}
@@ -116,7 +116,7 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
           {/* Last run */}
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             {agent.lastRun ? (
-              <div className="flex items-center gap-2 text-[12px] font-mono">
+              <div className="flex items-center gap-2 text-[13px] font-mono">
                 {agent.lastRun.status === "success" ? (
                   <span className="flex items-center gap-1 text-green">
                     <Check className="h-3 w-3" /> ok
@@ -130,7 +130,7 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
                 {duration && <span className="text-muted">{duration}</span>}
               </div>
             ) : (
-              <span className="text-[12px] font-mono text-muted italic">no runs</span>
+              <span className="text-[13px] font-mono text-muted italic">no runs</span>
             )}
             <span className="text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
               <ArrowRight className="h-3 w-3" />
@@ -211,7 +211,7 @@ export default function ProjectDetailPage() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="flex items-center gap-2 text-[13px] font-mono text-muted-foreground">
+        <div className="flex items-center gap-2 text-[14px] font-mono text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
           loading...
         </div>
@@ -222,8 +222,8 @@ export default function ProjectDetailPage() {
   if (error || !project) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <p className="text-[14px] font-mono text-red">[ERROR] {error || "Project not found"}</p>
-        <Link href="/projects" className="text-[13px] font-mono text-accent hover:underline">
+        <p className="text-[15px] font-mono text-red">[ERROR] {error || "Project not found"}</p>
+        <Link href="/projects" className="text-[14px] font-mono text-accent hover:underline">
           <ArrowLeft className="inline h-3 w-3 mr-1" />back
         </Link>
       </div>
@@ -234,38 +234,38 @@ export default function ProjectDetailPage() {
     <div className="flex-1 overflow-y-auto">
       {/* Header */}
       <div className="page-header">
-        <div className="px-8 lg:px-12">
+        <div className="px-8 lg:px-16">
           <div className="animate-fade-in">
-            <Link href="/projects" className="inline-flex items-center gap-1.5 text-[13px] font-mono text-muted-foreground hover:text-accent transition-colors group mb-4">
+            <Link href="/projects" className="inline-flex items-center gap-1.5 text-[14px] font-mono text-muted-foreground hover:text-accent transition-colors group mb-4">
               <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
               projects
             </Link>
 
             <div className="flex items-start justify-between gap-4">
               {editing ? (
-                <div className="flex-1 max-w-xl space-y-2">
+                <div className="flex-1 max-w-2xl space-y-2">
                   <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                    className="w-full border border-border bg-background px-3 py-2 text-[16px] font-mono font-bold text-foreground uppercase outline-none focus:border-accent input-focus" autoFocus />
+                    className="w-full border border-border bg-background px-3 py-2 text-[17px] font-mono font-bold text-foreground uppercase outline-none focus:border-accent input-focus" autoFocus />
                   <input type="text" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="description"
-                    className="w-full border border-border bg-background px-3 py-2 text-[14px] font-mono text-foreground outline-none focus:border-accent input-focus" />
+                    className="w-full border border-border bg-background px-3 py-2 text-[15px] font-mono text-foreground outline-none focus:border-accent input-focus" />
                   <div className="flex gap-2">
-                    <button onClick={handleSave} disabled={saving} className="border border-accent bg-accent/10 px-3 py-1.5 text-[12px] font-mono font-bold text-accent uppercase hover:bg-accent/20 disabled:opacity-40">
+                    <button onClick={handleSave} disabled={saving} className="border border-accent bg-accent/10 px-3 py-1.5 text-[13px] font-mono font-bold text-accent uppercase hover:bg-accent/20 disabled:opacity-40">
                       {saving ? "saving..." : "save"}
                     </button>
                     <button onClick={() => { setEditing(false); setEditName(project.name); setEditDesc(project.description || ""); }}
-                      className="border border-border px-3 py-1.5 text-[12px] font-mono text-muted-foreground hover:text-foreground">cancel</button>
+                      className="border border-border px-3 py-1.5 text-[13px] font-mono text-muted-foreground hover:text-foreground">cancel</button>
                   </div>
                 </div>
               ) : (
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-accent text-[15px] glow-text">&gt;&gt;</span>
-                    <h1 className="text-[24px] font-bold tracking-widest text-foreground uppercase glow-text">
+                    <span className="text-accent text-[16px] glow-text">&gt;&gt;</span>
+                    <h1 className="text-[26px] font-bold tracking-widest text-foreground uppercase glow-text">
                       {project.name}
                     </h1>
                   </div>
                   {project.description && (
-                    <p className="text-[13px] font-mono text-muted-foreground mt-1 ml-7">
+                    <p className="text-[14px] font-mono text-muted-foreground mt-1 ml-7">
                       // {project.description}
                     </p>
                   )}
@@ -279,9 +279,9 @@ export default function ProjectDetailPage() {
                   </button>
                   {confirmDelete ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-mono text-red">rm -rf?</span>
-                      <button onClick={handleDelete} disabled={deleting} className="border border-red/30 bg-red/5 px-2 py-1 text-[12px] font-mono text-red hover:bg-red/15 disabled:opacity-40">{deleting ? "..." : "y"}</button>
-                      <button onClick={() => setConfirmDelete(false)} className="text-[12px] font-mono text-muted hover:text-foreground">n</button>
+                      <span className="text-[13px] font-mono text-red">rm -rf?</span>
+                      <button onClick={handleDelete} disabled={deleting} className="border border-red/30 bg-red/5 px-2 py-1 text-[13px] font-mono text-red hover:bg-red/15 disabled:opacity-40">{deleting ? "..." : "y"}</button>
+                      <button onClick={() => setConfirmDelete(false)} className="text-[13px] font-mono text-muted hover:text-foreground">n</button>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmDelete(true)} className="border border-red/20 p-2 text-red/40 hover:text-red hover:border-red/40 transition-colors" title="Delete">
@@ -295,18 +295,18 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      <div className="px-8 lg:px-12 py-8 space-y-5">
+      <div className="px-8 lg:px-16 py-8 space-y-5">
         {/* Agents header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-[12px] font-mono text-muted uppercase tracking-widest">agents</span>
-            <span className="border border-accent/30 bg-accent/5 px-2 py-0.5 text-[12px] font-mono font-bold text-accent">
+            <span className="text-[13px] font-mono text-muted uppercase tracking-widest">agents</span>
+            <span className="border border-accent/30 bg-accent/5 px-2 py-0.5 text-[13px] font-mono font-bold text-accent">
               {agents.length}
             </span>
           </div>
           <Link
             href={`/projects/${params.id}/agents/new`}
-            className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[12px] font-mono font-bold text-accent uppercase tracking-wider hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.15)] transition-all"
+            className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[13px] font-mono font-bold text-accent uppercase tracking-wider hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.15)] transition-all"
           >
             <Plus className="h-3.5 w-3.5" />
             spawn agent
@@ -314,7 +314,7 @@ export default function ProjectDetailPage() {
         </div>
 
         {error && (
-          <div className="animate-type-in border border-red/30 bg-red/5 px-4 py-2.5 text-[13px] font-mono text-red">
+          <div className="animate-type-in border border-red/30 bg-red/5 px-4 py-2.5 text-[14px] font-mono text-red">
             [ERROR] {error}
           </div>
         )}
@@ -327,7 +327,7 @@ export default function ProjectDetailPage() {
           </div>
         ) : (
           <div className="animate-fade-in flex flex-col items-center justify-center py-20 text-center border border-dashed border-border">
-            <div className="text-[13px] font-mono text-muted-foreground space-y-1">
+            <div className="text-[14px] font-mono text-muted-foreground space-y-1">
               <p className="text-muted">$ jarvis --list-agents</p>
               <p>0 agents registered</p>
               <p className="text-muted mt-3">run <span className="text-accent">&quot;spawn agent&quot;</span> to create one</p>

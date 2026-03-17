@@ -76,7 +76,7 @@ function MessageBubble({
                 }}
                 disabled={appliedSoul}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium transition-colors",
+                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-medium transition-colors",
                   appliedSoul
                     ? "bg-green/10 text-green border border-green/20"
                     : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20"
@@ -99,7 +99,7 @@ function MessageBubble({
                 }}
                 disabled={appliedSkill}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium transition-colors",
+                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-medium transition-colors",
                   appliedSkill
                     ? "bg-green/10 text-green border border-green/20"
                     : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20"
@@ -367,7 +367,7 @@ export function ClaudePanel({
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-3.5 w-3.5 text-accent" />
-          <span className="text-[13px] font-semibold text-foreground">
+          <span className="text-[14px] font-semibold text-foreground">
             Claude Assistant
           </span>
         </div>
@@ -385,7 +385,7 @@ export function ClaudePanel({
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Sparkles className="h-6 w-6 text-muted mb-2" />
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-[14px] text-muted-foreground">
               Ask Claude to help write or refine your agent&apos;s prompts
             </p>
             <div className="mt-3 space-y-1">
@@ -400,7 +400,7 @@ export function ClaudePanel({
                     setInput(suggestion);
                     textareaRef.current?.focus();
                   }}
-                  className="block w-full rounded-lg border border-border/50 px-2.5 py-1.5 text-[12px] text-muted-foreground text-left transition-colors hover:border-accent/30 hover:text-foreground"
+                  className="block w-full rounded-lg border border-border/50 px-2.5 py-1.5 text-[13px] text-muted-foreground text-left transition-colors hover:border-accent/30 hover:text-foreground"
                 >
                   {suggestion}
                 </button>
@@ -466,7 +466,7 @@ export function ClaudePanel({
             </button>
           )}
         </form>
-        <p className="mt-1 text-[11px] text-muted">
+        <p className="mt-1 text-[12px] text-muted">
           Enter to send, Shift+Enter for newline. Uses Claude CLI.
         </p>
       </div>

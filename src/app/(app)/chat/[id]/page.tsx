@@ -150,8 +150,8 @@ export default function ConversationPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatMessagesList messages={messages} isLoading={isLoading} />
-      <div className="border-t border-border bg-background px-4 py-4">
-        <div className="mx-auto max-w-2xl">
+      <div className="border-t border-border bg-surface/50 backdrop-blur-sm px-6 py-5">
+        <div className="mx-auto max-w-4xl">
           <ChatInput onSend={handleSend} disabled={isLoading} />
         </div>
       </div>

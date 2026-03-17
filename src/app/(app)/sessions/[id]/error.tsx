@@ -34,7 +34,7 @@ export default function SessionDetailError({
         </button>
         <button
           onClick={() => router.push("/sessions")}
-          className="inline-flex items-center gap-1.5 text-[12px] text-accent transition-colors hover:text-accent-dim"
+          className="inline-flex items-center gap-1.5 text-[13px] text-accent transition-colors hover:text-accent-dim"
         >
           <ArrowLeft className="h-3 w-3" />
           Back to Sessions

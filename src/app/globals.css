@@ -89,7 +89,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -180,7 +180,7 @@ body {
 
 .page-header {
   position: relative;
-  padding: 2rem 0 1.5rem;
+  padding: 2.5rem 0 2rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -189,21 +189,22 @@ body {
   position: absolute;
   bottom: -1px;
   left: 0;
-  width: 120px;
+  width: 160px;
   height: 2px;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 .term-card {
   position: relative;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface);
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
 }
 .term-card:hover {
   border-color: var(--border-hover);
-  box-shadow: 0 2px 8px rgba(13, 17, 23, 0.4);
+  box-shadow: 0 4px 16px rgba(13, 17, 23, 0.5);
+  transform: translateY(-1px);
 }
 
 .grid-pattern {
@@ -233,8 +234,8 @@ body {
 
 .prose-markdown {
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.75;
   color: var(--muted-foreground);
 }
 

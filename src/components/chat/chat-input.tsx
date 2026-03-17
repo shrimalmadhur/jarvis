@@ -43,7 +43,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const hasContent = value.trim().length > 0;
 
   return (
-    <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-surface px-4 py-3 transition-colors focus-within:border-border-hover">
+    <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-surface px-5 py-4 transition-all duration-200 focus-within:border-accent/40 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.08)]">
       <textarea
         ref={textareaRef}
         value={value}
@@ -53,19 +53,19 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         placeholder="Message Jarvis..."
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none bg-transparent text-[14px] leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-40"
+        className="flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-40"
       />
       <button
         onClick={handleSubmit}
         disabled={!hasContent || disabled}
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-200",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
           hasContent && !disabled
-            ? "bg-accent text-accent-foreground hover:bg-accent-dim"
+            ? "bg-accent text-accent-foreground hover:bg-accent-dim shadow-sm shadow-accent/20"
             : "bg-surface-raised text-muted"
         )}
       >
-        <ArrowUp className="h-4 w-4" />
+        <ArrowUp className="h-[18px] w-[18px]" />
       </button>
     </div>
   );
