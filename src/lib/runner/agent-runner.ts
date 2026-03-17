@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 import type { RunEvent } from "./run-events";
-import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, updateMemoryAfterRun, buildChildEnv, hasWorkspaceArchive } from "./agent-memory";
+import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, AGENT_OUTPUT_RULES, updateMemoryAfterRun, buildChildEnv, hasWorkspaceArchive } from "./agent-memory";
 
 /**
  * Build the user message from skill + context.
@@ -93,9 +93,10 @@ export async function runAgentTask(
   // Build the full prompt: soul as system prompt context + user message
   const prompt = userMessage;
 
-  // Use read-only memory context note — no write instructions.
-  // Memory updates are handled by the sub-agent in Phase 2.
-  const systemPrompt = definition.soul + MEMORY_CONTEXT_NOTE;
+  // Append system-level rules to the agent's soul:
+  // 1. Memory context (read-only — updates handled by Phase 2 sub-agent)
+  // 2. Output rules (deliverable-only output, no housekeeping remarks)
+  const systemPrompt = definition.soul + MEMORY_CONTEXT_NOTE + AGENT_OUTPUT_RULES;
 
   const args = [
     "-p",
@@ -107,7 +108,8 @@ export async function runAgentTask(
 
   const childEnv = buildChildEnv(definition.config.envVars);
 
-  const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  const AGENT_TIMEOUT_MS = 10 * 60 * 1000;   // 10 minutes
+  const MAX_FALLBACK_CHARS = 50_000;           // 50KB cap on fallback output
 
   // Phase 1: Run the main agent
   const result = await new Promise<RunResult>((resolve) => {
@@ -250,9 +252,15 @@ export async function runAgentTask(
       const isSuccess = code === 0;
 
       // resultText comes from the CLI's "result" event — the agent's final deliverable.
-      // Fall back to the last assistant text block only if resultText is empty (e.g. crash).
-      const finalOutput = resultText
-        || (assistantTextBlocks.length > 0 ? assistantTextBlocks[assistantTextBlocks.length - 1] : "");
+      // Fall back to ALL assistant text blocks (joined) if resultText is empty (e.g. crash).
+      // Using all blocks instead of just the last one prevents losing the main deliverable
+      // when the agent's final message is a short housekeeping remark.
+      // Keeps the tail (most recent output) capped at 50KB to prevent DB bloat.
+      let fallbackOutput = assistantTextBlocks.length > 0 ? assistantTextBlocks.join("\n\n") : "";
+      if (fallbackOutput.length > MAX_FALLBACK_CHARS) {
+        fallbackOutput = "[earlier output truncated]\n\n" + fallbackOutput.substring(fallbackOutput.length - MAX_FALLBACK_CHARS);
+      }
+      const finalOutput = resultText.trim() || fallbackOutput;
 
       resolve({
         agentName: definition.config.name,
