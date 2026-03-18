@@ -92,7 +92,7 @@ while IFS=$'\t' read -r agent_id agent_name schedule; do
   fi
 
   # Use --id instead of name to avoid breakage when agents are renamed
-  entry="$schedule ${ENV_SOURCE}cd '$RUN_DIR' && bun run --tsconfig tsconfig.runner.json scripts/run-agents.ts --id '$agent_id' >> '$LOG_DIR/agents.log' 2>&1"
+  entry="$schedule ${ENV_SOURCE}cd '$RUN_DIR' && npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts --id '$agent_id' >> '$LOG_DIR/agents.log' 2>&1"
   # Use real newlines (not \n literals) to avoid echo -e interpreting backslash sequences in names
   CRON_ENTRIES="${CRON_ENTRIES}
 # Agent: $agent_name ($agent_id)

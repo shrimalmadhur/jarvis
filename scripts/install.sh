@@ -241,8 +241,19 @@ rsync -a "$REPO_DIR/drizzle/" "$INSTALL_DIR/drizzle/"
 cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
+cp "$REPO_DIR/bun.lock" "$INSTALL_DIR/"
 
 chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$INSTALL_DIR"
+
+# Install runner script dependencies (dotenv, drizzle-orm, AI SDKs, etc.)
+echo ""
+echo "Installing runner dependencies..."
+sudo -u "$ACTUAL_USER" bash -c "cd '$INSTALL_DIR' && '$BUN_BIN' install --frozen-lockfile"
+
+# Rebuild better-sqlite3 for system Node.js (runner scripts use npx tsx, not bun)
+echo ""
+echo "Rebuilding better-sqlite3 for Node $(node --version)..."
+sudo -u "$ACTUAL_USER" bash -c "cd '$INSTALL_DIR' && '$NPM_BIN' rebuild better-sqlite3"
 
 # --- Create environment file ---
 echo ""

@@ -232,9 +232,22 @@ rsync -a "$REPO_DIR/scripts/" "$INSTALL_DIR/scripts/"
 cp "$REPO_DIR/tsconfig.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
+cp "$REPO_DIR/bun.lock" "$INSTALL_DIR/"
 
 # Ensure data directory exists (preserves existing DB)
 mkdir -p "$INSTALL_DIR/data"
+
+# Install runner script dependencies (dotenv, drizzle-orm, AI SDKs, etc.)
+echo ""
+echo "Installing runner dependencies..."
+cd "$INSTALL_DIR" && bun install --frozen-lockfile
+cd "$REPO_DIR"
+
+# Rebuild better-sqlite3 for system Node.js (runner scripts use npx tsx, not bun)
+echo ""
+echo "Rebuilding better-sqlite3 for Node $(node --version)..."
+cd "$INSTALL_DIR" && npm rebuild better-sqlite3
+cd "$REPO_DIR"
 
 # --- Restart service (OS-specific) ---
 echo ""
