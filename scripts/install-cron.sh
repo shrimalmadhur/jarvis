@@ -42,8 +42,6 @@ if ! $DRY_RUN && [ ! -d "$LOG_DIR" ]; then
 fi
 
 # Query enabled agents from DB using bun:sqlite (built-in, no native deps).
-# Note: the Next.js app uses better-sqlite3 (for Node.js compat), but this
-# script runs via bun so bun:sqlite is the right choice here.
 # Output is TSV: id\tname\tschedule (one line per agent, no python3 needed).
 BUN_STDERR_FILE=$(mktemp)
 AGENTS_TSV=$(cd "$PROJECT_DIR" && bun -e "
@@ -92,7 +90,7 @@ while IFS=$'\t' read -r agent_id agent_name schedule; do
   fi
 
   # Use --id instead of name to avoid breakage when agents are renamed
-  entry="$schedule ${ENV_SOURCE}cd '$RUN_DIR' && npx tsx --tsconfig tsconfig.runner.json scripts/run-agents.ts --id '$agent_id' >> '$LOG_DIR/agents.log' 2>&1"
+  entry="$schedule ${ENV_SOURCE}cd '$RUN_DIR' && bun run scripts/run-agents.ts --id '$agent_id' >> '$LOG_DIR/agents.log' 2>&1"
   # Use real newlines (not \n literals) to avoid echo -e interpreting backslash sequences in names
   CRON_ENTRIES="${CRON_ENTRIES}
 # Agent: $agent_name ($agent_id)

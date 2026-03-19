@@ -1,5 +1,4 @@
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import path from "node:path";
 
 /**
@@ -13,7 +12,8 @@ import path from "node:path";
  * — the second attempt will see the migration as already applied.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function autoMigrate(db: BetterSQLite3Database<any>) {
+export function autoMigrate(db: BunSQLiteDatabase<any>) {
+  const { migrate } = require("drizzle-orm/bun-sqlite/migrator") as typeof import("drizzle-orm/bun-sqlite/migrator");
   const migrationsFolder = path.resolve(process.cwd(), "drizzle");
   try {
     migrate(db, { migrationsFolder });
@@ -21,8 +21,8 @@ export function autoMigrate(db: BetterSQLite3Database<any>) {
     // Handle race condition: another worker may have run the migration
     // between our check and our execution. Retry once — the migration
     // will now be recorded as applied and skipped.
-    const cause = (error as { cause?: { code?: string } }).cause;
-    if (cause?.code === "SQLITE_ERROR" && String(error).includes("already exists")) {
+    const code = (error as { code?: string }).code;
+    if (code === "SQLITE_ERROR" && String(error).includes("already exists")) {
       try {
         migrate(db, { migrationsFolder });
         return;

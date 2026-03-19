@@ -39,30 +39,6 @@ else
     green "  Bun $(bun --version) installed"
 fi
 
-# ── 2b. Node.js (needed by Next.js build workers) ──
-if command -v node &>/dev/null; then
-    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-    if [ "$NODE_VERSION" -lt 20 ]; then
-        yellow "  Node.js $(node -v) is too old (need >= 20), upgrading..."
-        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
-        sudo apt-get install -y -qq nodejs > /dev/null
-        hash -r 2>/dev/null || true
-        NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-        if [ "$NODE_VERSION" -lt 20 ]; then
-            red "Error: Node.js upgrade failed, still at $(node -v)"
-            exit 1
-        fi
-        green "  Node.js upgraded to $(node -v)"
-    else
-        green "  Node.js $(node -v) already installed"
-    fi
-else
-    echo "  Installing Node.js 22..."
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
-    sudo apt-get install -y -qq nodejs > /dev/null
-    hash -r 2>/dev/null || true
-    green "  Node.js $(node -v) installed"
-fi
 
 # ── 3. Pull latest (if upgrade) ────────────────
 if $UPGRADE; then
@@ -79,11 +55,6 @@ echo "Step $($UPGRADE && echo 3 || echo 2): Installing dependencies..."
 cd "$REPO_DIR"
 bun install --frozen-lockfile
 green "  Dependencies installed"
-
-# Rebuild better-sqlite3 for the system Node.js version
-echo ""
-echo "Rebuilding native modules for Node $(node --version)..."
-npm rebuild better-sqlite3
 
 echo ""
 echo "Step $($UPGRADE && echo 4 || echo 3): Building..."
@@ -137,7 +108,7 @@ echo ""
 echo "Step $($UPGRADE && echo 8 || echo 7): Installing systemd service..."
 INSTALL_DIR="/usr/local/lib/dobby"
 STANDALONE_DIR="$REPO_DIR/.next/standalone"
-NODE_BIN_DIR="$(dirname "$(command -v node)")"
+BUN_BIN_DIR="$(dirname "$(command -v bun)")"
 
 # Stop existing service before deploy (if running)
 sudo systemctl stop dobby 2>/dev/null || true
@@ -171,12 +142,6 @@ sudo cp -r "$REPO_DIR/.next/static" "$INSTALL_DIR/.next/static"
 # SQLite data directory
 sudo mkdir -p "$INSTALL_DIR/data"
 
-# Copy better-sqlite3 native addon (not included in standalone bundle)
-if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
-    sudo mkdir -p "$INSTALL_DIR/node_modules/better-sqlite3"
-    sudo rsync -a "$REPO_DIR/node_modules/better-sqlite3/" "$INSTALL_DIR/node_modules/better-sqlite3/"
-fi
-
 # Runner dependencies: agents, source, scripts, configs
 # Use rsync to merge into existing dirs (cp -R creates nested duplicates)
 [ -d "$REPO_DIR/agents" ] && sudo rsync -a "$REPO_DIR/agents/" "$INSTALL_DIR/agents/"
@@ -188,7 +153,7 @@ sudo cp "$REPO_DIR/tsconfig.runner.json" "$INSTALL_DIR/"
 sudo cp "$REPO_DIR/package.json" "$INSTALL_DIR/"
 
 # run.sh
-sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" | sudo tee "$INSTALL_DIR/run.sh" > /dev/null
+sed "s|__BUN_BIN_DIR__|$BUN_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" | sudo tee "$INSTALL_DIR/run.sh" > /dev/null
 sudo chmod +x "$INSTALL_DIR/run.sh"
 
 sudo chown -R "$(whoami)" "$INSTALL_DIR"

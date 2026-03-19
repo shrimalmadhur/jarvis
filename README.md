@@ -12,7 +12,7 @@ Dobby wields MCP (Model Context Protocol) to connect with external magical servi
 |----------|-------------|
 | **Framework** | Next.js 16 App Router, React 19, TypeScript |
 | **Styling** | Tailwind CSS v4 -- robes tailored to perfection |
-| **Database** | SQLite via `better-sqlite3` + `drizzle-orm` -- Dobby's Pensieve |
+| **Database** | SQLite via `bun:sqlite` + `drizzle-orm` -- Dobby's Pensieve |
 | **LLM Providers** | Gemini (default), OpenAI, Anthropic -- three wand cores |
 | **Tools** | MCP servers + built-in filesystem/time tools -- Dobby's toolkit |
 | **Runtime** | Bun -- swift as a Nimbus 2000 |
