@@ -50,7 +50,7 @@ export function ChatMessagesList({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-10">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-4xl 2xl:max-w-5xl space-y-6">
         {visibleMessages.map((msg, i) => (
           <ChatMessage
             key={msg.id || i}
