@@ -174,10 +174,17 @@ echo "Stopping $SERVICE_NAME..."
 if [ "$OS" = "Darwin" ]; then
     ACTUAL_UID="$(id -u)"
     launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
+    # Also stop old jarvis service if still running
+    launchctl bootout gui/"$ACTUAL_UID"/com.jarvis.agent 2>/dev/null || true
     sleep 1
 else
     sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    # Also stop old jarvis service if still running
+    sudo systemctl stop jarvis 2>/dev/null || true
+    sudo systemctl disable jarvis 2>/dev/null || true
 fi
+# Kill anything still holding port 7749 (e.g. orphaned old process)
+sudo kill $(sudo lsof -t -i:7749) 2>/dev/null || true
 
 # --- Ensure log directory exists (migrate old one if needed) ---
 OLD_LOG_DIR="/var/log/jarvis"
