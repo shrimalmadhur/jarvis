@@ -73,8 +73,8 @@ export class OpenAIProvider implements LLMProvider {
           id: tc.id,
           type: "function" as const,
           function: {
-            name: (tc as { type: "function"; id: string; function: { name: string; arguments: string } }).function.name,
-            arguments: (tc as { type: "function"; id: string; function: { name: string; arguments: string } }).function.arguments,
+            name: tc.function.name,
+            arguments: tc.function.arguments,
           },
         }));
 

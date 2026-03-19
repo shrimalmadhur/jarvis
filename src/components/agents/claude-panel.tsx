@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Sparkles,
-  Send,
   Loader2,
   Check,
   CornerDownLeft,
@@ -259,6 +258,17 @@ export function ClaudePanel({
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
+        const updateLastMessage = () => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: "assistant",
+              content: assistantText,
+            };
+            return updated;
+          });
+        };
+
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const jsonStr = line.slice(6);
@@ -267,36 +277,14 @@ export function ClaudePanel({
             const event = JSON.parse(jsonStr);
 
             if (event.type === "result" && event.text) {
-              // Final result replaces accumulated text
               assistantText = event.text;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantText,
-                };
-                return updated;
-              });
+              updateLastMessage();
             } else if (event.type === "text" && event.text) {
               assistantText += event.text;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantText,
-                };
-                return updated;
-              });
+              updateLastMessage();
             } else if (event.type === "error") {
               assistantText += `\n[Error: ${event.text}]`;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantText,
-                };
-                return updated;
-              });
+              updateLastMessage();
             }
           } catch {
             // skip unparseable

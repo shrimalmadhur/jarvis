@@ -87,7 +87,7 @@ async function main() {
 
   // Load agents from DB
   const definitions = await loadAgentDefinitionsFromDB({
-    projectName: projectName || undefined,
+    projectName,
   });
 
   // --list: show configured agents

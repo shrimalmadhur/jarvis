@@ -6,7 +6,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
-  Bot,
   Plus,
   Clock,
   Globe,
@@ -20,6 +19,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { formatDuration } from "@/lib/utils/format";
 
 interface ProjectDetail {
   id: string;
@@ -51,9 +51,7 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
     ? formatDistanceToNow(new Date(agent.lastRun.createdAt), { addSuffix: true })
     : null;
   const duration = agent.lastRun?.durationMs
-    ? agent.lastRun.durationMs < 1000
-      ? `${agent.lastRun.durationMs}ms`
-      : `${(agent.lastRun.durationMs / 1000).toFixed(1)}s`
+    ? formatDuration(agent.lastRun.durationMs)
     : null;
 
   return (

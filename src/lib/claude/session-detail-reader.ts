@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import type {
   ClaudeSessionEntry,
   SessionDetailResponse,
@@ -8,52 +7,19 @@ import type {
   SubAgentInfo,
   TaskInfo,
 } from "./types";
-
-const CLAUDE_DIR = path.join(os.homedir(), ".claude");
-const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects");
-const TASKS_DIR = path.join(CLAUDE_DIR, "tasks");
-
-const ACTIVE_MS = 2 * 60 * 1000;
-const IDLE_MS = 10 * 60 * 1000;
+import { PROJECTS_DIR, TASKS_DIR, ACTIVE_MS, IDLE_MS } from "./constants";
+import {
+  shortenModel,
+  extractProjectName,
+  decodeProjectDir,
+  parseJsonlEntries,
+} from "./utils";
 
 function getStatus(mtimeMs: number): "active" | "idle" | "completed" {
   const age = Date.now() - mtimeMs;
   if (age < ACTIVE_MS) return "active";
   if (age < IDLE_MS) return "idle";
   return "completed";
-}
-
-function shortenModel(model: string): string {
-  if (model.includes("opus-4-6")) return "Opus 4.6";
-  if (model.includes("opus-4-5")) return "Opus 4.5";
-  if (model.includes("sonnet-4-6")) return "Sonnet 4.6";
-  if (model.includes("sonnet-4-5")) return "Sonnet 4.5";
-  if (model.includes("haiku-4-6")) return "Haiku 4.6";
-  if (model.includes("haiku-4-5")) return "Haiku 4.5";
-  if (model.includes("opus-4")) return "Opus 4";
-  if (model.includes("sonnet-4")) return "Sonnet 4";
-  if (model.includes("haiku-4")) return "Haiku 4";
-  if (model === "<synthetic>") return "synthetic";
-  return model;
-}
-
-function extractProjectName(cwdPath: string): string {
-  const m = cwdPath.match(/conductor\/workspaces\/([^/]+)\/([^/]+)/);
-  if (m) return `${m[1]}/${m[2]}`;
-  return path.basename(cwdPath);
-}
-
-function parseAllEntries(content: string): ClaudeSessionEntry[] {
-  const entries: ClaudeSessionEntry[] = [];
-  for (const line of content.split("\n")) {
-    if (!line) continue;
-    try {
-      entries.push(JSON.parse(line));
-    } catch {
-      // skip malformed
-    }
-  }
-  return entries;
 }
 
 function getContentBlocks(entry: ClaudeSessionEntry) {
@@ -197,7 +163,7 @@ async function readSubAgents(
     agentFiles.map(async (file) => {
       const filePath = path.join(subagentsDir, file);
       const content = await fs.readFile(filePath, "utf-8");
-      const entries = parseAllEntries(content);
+      const entries = parseJsonlEntries<ClaudeSessionEntry>(content);
       if (entries.length === 0) return null;
 
       const agentId = file.replace("agent-", "").replace(".jsonl", "");
@@ -313,7 +279,7 @@ export async function readSessionDetail(
     return null;
   }
 
-  const entries = parseAllEntries(content);
+  const entries = parseJsonlEntries<ClaudeSessionEntry>(content);
   if (entries.length === 0) return null;
 
   // Extract metadata
@@ -341,7 +307,7 @@ export async function readSessionDetail(
 
   const firstEntry = entries[0];
   const lastEntry = entries[entries.length - 1];
-  const projectPath = cwd || projectDir.replace(/^-/, "/").replace(/-/g, "/");
+  const projectPath = cwd || decodeProjectDir(projectDir);
   const status = getStatus(fileStat.mtimeMs);
   const fallbackTime = new Date(fileStat.mtimeMs).toISOString();
 
@@ -357,7 +323,7 @@ export async function readSessionDetail(
     session: {
       sessionId,
       slug,
-      projectName: extractProjectName(projectPath),
+      projectName: extractProjectName(projectPath).projectName,
       projectPath,
       gitBranch,
       model: model ? shortenModel(model) : null,
@@ -396,7 +362,7 @@ export async function readSubAgentDetail(
     return null;
   }
 
-  const entries = parseAllEntries(content);
+  const entries = parseJsonlEntries<ClaudeSessionEntry>(content);
   if (entries.length === 0) return null;
 
   let slug: string | null = null;
@@ -423,7 +389,7 @@ export async function readSubAgentDetail(
 
   const firstEntry = entries[0];
   const lastEntry = entries[entries.length - 1];
-  const projectPath = cwd || projectDir.replace(/^-/, "/").replace(/-/g, "/");
+  const projectPath = cwd || decodeProjectDir(projectDir);
   const status = getStatus(fileStat.mtimeMs);
   const fallbackTime = new Date(fileStat.mtimeMs).toISOString();
 
@@ -434,7 +400,7 @@ export async function readSubAgentDetail(
     session: {
       sessionId: `${sessionId}:${agentId}`,
       slug: slug ? `${slug} / ${agentId}` : agentId,
-      projectName: extractProjectName(projectPath),
+      projectName: extractProjectName(projectPath).projectName,
       projectPath,
       gitBranch,
       model: model ? shortenModel(model) : null,

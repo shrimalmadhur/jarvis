@@ -4,6 +4,7 @@ import { agents, agentRuns } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { updateAgentSchema } from "@/lib/validations/agent";
 import { syncCrontab } from "@/lib/cron/sync";
+import { maskToken } from "@/lib/notifications/telegram";
 
 export async function GET(
   _request: Request,
@@ -27,7 +28,7 @@ export async function GET(
     const rawEnvVars = (agent.envVars as Record<string, string>) || {};
     const maskedEnvVars: Record<string, string> = {};
     for (const [k, v] of Object.entries(rawEnvVars)) {
-      maskedEnvVars[k] = v.length <= 8 ? "****" : v.substring(0, 4) + "****" + v.substring(v.length - 4);
+      maskedEnvVars[k] = maskToken(v);
     }
 
     return NextResponse.json({
@@ -113,10 +114,7 @@ export async function PATCH(
           // Check if the submitted value exactly matches the masked form
           // the GET endpoint would produce for the original value.
           const orig = originalEnvVars[k];
-          const expectedMask = orig.length <= 8
-            ? "****"
-            : orig.substring(0, 4) + "****" + orig.substring(orig.length - 4);
-          if (v === expectedMask) {
+          if (v === maskToken(orig)) {
             merged[k] = orig;
             continue;
           }

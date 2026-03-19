@@ -69,11 +69,7 @@ export function TopNav({ onNewChat }: TopNavProps) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =
-            pathname === item.href ||
-            (item.href === "/chat" && pathname.startsWith("/chat/")) ||
-            (item.href === "/projects" && pathname.startsWith("/projects")) ||
-            (item.href === "/sessions" && pathname.startsWith("/sessions")) ||
-            (item.href === "/settings" && pathname.startsWith("/settings"));
+            pathname === item.href || pathname.startsWith(item.href + "/");
 
           return (
             <Link

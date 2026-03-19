@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { notificationConfigs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-
-function maskToken(token: string): string {
-  if (token.length <= 8) return "****";
-  return token.substring(0, 4) + "****" + token.substring(token.length - 4);
-}
+import { maskToken } from "@/lib/notifications/telegram";
 
 function channelKey(agentId: string) {
   return `telegram-agent:${agentId}`;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { agents, projects, agentRuns } from "@/lib/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { createAgentSchema } from "@/lib/validations/agent";
 import { cronToHuman } from "@/lib/utils/cron";
 import { syncCrontab } from "@/lib/cron/sync";

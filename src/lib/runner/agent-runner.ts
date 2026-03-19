@@ -88,10 +88,7 @@ export async function runAgentTask(
   const workspaceMemory = readWorkspaceMemory(workspaceDir);
   const archiveExists = hasWorkspaceArchive(workspaceDir);
 
-  const userMessage = buildUserMessage(definition, { workspaceMemory, hasArchive: archiveExists });
-
-  // Build the full prompt: soul as system prompt context + user message
-  const prompt = userMessage;
+  const prompt = buildUserMessage(definition, { workspaceMemory, hasArchive: archiveExists });
 
   // Append system-level rules to the agent's soul:
   // 1. Memory context (read-only — updates handled by Phase 2 sub-agent)
@@ -154,9 +151,6 @@ export async function runAgentTask(
           // Capture result text
           if (event.type === "result") {
             if (event.result) resultText = event.result;
-            if (event.cost_usd !== undefined) {
-              // stream-json result includes token usage in some versions
-            }
             if (event.input_tokens) promptTokens = event.input_tokens;
             if (event.output_tokens) completionTokens = event.output_tokens;
             if (event.model) model = event.model;
@@ -203,11 +197,14 @@ export async function runAgentTask(
                 if (block.type === "tool_result" && block.tool_use_id) {
                   const pending = pendingTools.get(block.tool_use_id);
                   if (pending) {
-                    const outputText = typeof block.content === "string"
-                      ? block.content
-                      : Array.isArray(block.content)
-                        ? block.content.map((c: { text?: string }) => c.text || "").join("")
-                        : JSON.stringify(block.content);
+                    let outputText: string;
+                    if (typeof block.content === "string") {
+                      outputText = block.content;
+                    } else if (Array.isArray(block.content)) {
+                      outputText = block.content.map((c: { text?: string }) => c.text || "").join("");
+                    } else {
+                      outputText = JSON.stringify(block.content);
+                    }
 
                     const toolDurationMs = Date.now() - pending.startTime;
                     toolUses.push({

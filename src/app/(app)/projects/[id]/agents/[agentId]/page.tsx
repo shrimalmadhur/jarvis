@@ -28,6 +28,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { AgentForm } from "@/components/agents/agent-form";
 import type { AgentFormData } from "@/components/agents/agent-form";
 import { cronToHuman } from "@/lib/utils/cron";
+import { formatDuration } from "@/lib/utils/format";
 import { MarkdownView } from "@/components/ui/markdown-view";
 import { LiveRunView } from "@/components/agents/live-run-view";
 
@@ -110,11 +111,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
   const timeAgo = run.createdAt
     ? formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })
     : null;
-  const duration = run.durationMs
-    ? run.durationMs < 1000
-      ? `${run.durationMs}ms`
-      : `${(run.durationMs / 1000).toFixed(1)}s`
-    : null;
+  const duration = run.durationMs ? formatDuration(run.durationMs) : null;
   const tokens = (run.promptTokens || 0) + (run.completionTokens || 0);
 
   return (

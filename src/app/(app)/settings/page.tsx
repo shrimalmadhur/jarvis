@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Plus,
   Trash2,
   Power,
   PowerOff,
@@ -165,6 +164,18 @@ interface MCPServer {
 
 const inputClasses =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-border-hover input-focus";
+
+function presetButtonClass(installed: boolean, isConfiguring: boolean): string {
+  if (installed) return "cursor-default border-border/50 opacity-40";
+  if (isConfiguring) return "border-accent/30 bg-accent-glow";
+  return "border-border hover:border-border-hover hover:bg-surface-hover";
+}
+
+function presetIconClass(installed: boolean, isConfiguring: boolean): string {
+  if (installed) return "text-muted";
+  if (isConfiguring) return "text-accent";
+  return "text-muted-foreground";
+}
 
 export default function SettingsPage() {
   const [servers, setServers] = useState<MCPServer[]>([]);
@@ -525,20 +536,12 @@ export default function SettingsPage() {
                         }
                       }}
                       className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all duration-200 ${
-                        installed
-                          ? "cursor-default border-border/50 opacity-40"
-                          : isConfiguring
-                            ? "border-accent/30 bg-accent-glow"
-                            : "border-border hover:border-border-hover hover:bg-surface-hover"
+                        presetButtonClass(installed, isConfiguring)
                       }`}
                     >
                       <div
                         className={`mt-0.5 ${
-                          installed
-                            ? "text-muted"
-                            : isConfiguring
-                              ? "text-accent"
-                              : "text-muted-foreground"
+                          presetIconClass(installed, isConfiguring)
                         }`}
                       >
                         {preset.icon}

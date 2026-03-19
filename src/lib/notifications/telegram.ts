@@ -7,6 +7,14 @@ import { eq } from "drizzle-orm";
 // Reuse the IPv4 agent pattern from src/lib/db/index.ts
 const ipv4Agent = new https.Agent({ family: 4 });
 
+/**
+ * Mask a secret token for display: show first 4 and last 4 chars.
+ */
+export function maskToken(token: string): string {
+  if (token.length <= 8) return "****";
+  return token.substring(0, 4) + "****" + token.substring(token.length - 4);
+}
+
 interface TelegramConfig {
   botToken: string;
   chatId: string;

@@ -1,17 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import type {
   ClaudeSessionEntry,
   AgentSession,
   AgentStatusResponse,
 } from "./types";
+import { CLAUDE_DIR, PROJECTS_DIR, ACTIVE_MS, IDLE_MS } from "./constants";
+import { shortenModel, extractProjectName, decodeProjectDir } from "./utils";
 
-const CLAUDE_DIR = path.join(os.homedir(), ".claude");
-const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects");
 const TAIL_BYTES = 16_384;
-const ACTIVE_MS = 2 * 60 * 1000;
-const IDLE_MS = 10 * 60 * 1000;
 const COMPLETED_MS = 60 * 60 * 1000;
 
 function getStatus(mtimeMs: number): "active" | "idle" | "completed" | null {
@@ -20,41 +17,6 @@ function getStatus(mtimeMs: number): "active" | "idle" | "completed" | null {
   if (age < IDLE_MS) return "idle";
   if (age < COMPLETED_MS) return "completed";
   return null;
-}
-
-function extractProjectName(cwdPath: string): {
-  projectName: string;
-  workspaceName: string;
-} {
-  const conductorMatch = cwdPath.match(
-    /conductor\/workspaces\/([^/]+)\/([^/]+)/
-  );
-  if (conductorMatch) {
-    return {
-      projectName: `${conductorMatch[1]}/${conductorMatch[2]}`,
-      workspaceName: conductorMatch[2],
-    };
-  }
-  const basename = path.basename(cwdPath);
-  return { projectName: basename, workspaceName: basename };
-}
-
-function decodeProjectDir(dirName: string): string {
-  return dirName.replace(/^-/, "/").replace(/-/g, "/");
-}
-
-function shortenModel(model: string): string {
-  if (model.includes("opus-4-6")) return "Opus 4.6";
-  if (model.includes("opus-4-5")) return "Opus 4.5";
-  if (model.includes("sonnet-4-6")) return "Sonnet 4.6";
-  if (model.includes("sonnet-4-5")) return "Sonnet 4.5";
-  if (model.includes("haiku-4-6")) return "Haiku 4.6";
-  if (model.includes("haiku-4-5")) return "Haiku 4.5";
-  if (model.includes("opus-4")) return "Opus 4";
-  if (model.includes("sonnet-4")) return "Sonnet 4";
-  if (model.includes("haiku-4")) return "Haiku 4";
-  if (model === "<synthetic>") return "synthetic";
-  return model;
 }
 
 async function readTail(filePath: string): Promise<ClaudeSessionEntry[]> {
