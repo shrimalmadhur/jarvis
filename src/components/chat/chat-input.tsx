@@ -53,7 +53,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         placeholder="Send an owl to Dobby..."
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-40"
+        className="flex-1 resize-none bg-transparent text-[1rem] leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-40"
       />
       <button
         onClick={handleSubmit}

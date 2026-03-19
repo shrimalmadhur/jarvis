@@ -447,8 +447,8 @@ export default function SettingsPage() {
   const installedNames = new Set(servers.map((s) => s.name));
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 lg:px-16 py-8">
-      <div className="space-y-8">
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-5xl px-8 lg:px-16 py-8 space-y-8">
         <div className="animate-fade-in">
           <h1 className="text-xl font-semibold text-foreground">Room of Requirement</h1>
           <p className="mt-1 text-sm text-muted-foreground">
