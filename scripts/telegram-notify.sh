@@ -1,5 +1,5 @@
 #!/bin/bash
-# Send a Telegram notification via the Jarvis server.
+# Send a Telegram notification via the Dobby server.
 # Can be used standalone or as a Claude Code Stop hook.
 #
 # Standalone usage: telegram-notify.sh "Your message here" [working_directory]
@@ -112,7 +112,7 @@ if git -C "$CWD" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
   fi
 fi
 
-# Send notification via Jarvis API
+# Send notification via Dobby API
 PAYLOAD=$(python3 -c '
 import json, sys
 data = {"title": "Claude agent finished \u2014 " + sys.argv[1], "message": sys.argv[2]}

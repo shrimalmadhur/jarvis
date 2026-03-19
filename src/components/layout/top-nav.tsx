@@ -33,7 +33,7 @@ export function TopNav({ onNewChat }: TopNavProps) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
-    const saved = localStorage.getItem("jarvis-theme");
+    const saved = localStorage.getItem("dobby-theme");
     if (saved === "light") {
       setTheme("light");
       document.documentElement.classList.add("light");
@@ -43,7 +43,7 @@ export function TopNav({ onNewChat }: TopNavProps) {
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    localStorage.setItem("jarvis-theme", next);
+    localStorage.setItem("dobby-theme", next);
     if (next === "light") {
       document.documentElement.classList.add("light");
     } else {
@@ -56,10 +56,10 @@ export function TopNav({ onNewChat }: TopNavProps) {
       {/* Brand */}
       <Link href="/chat" className="flex items-center gap-3 mr-8">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent shadow-sm shadow-accent/20">
-          <span className="text-[13px] font-bold text-accent-foreground">J</span>
+          <span className="text-[13px] font-bold text-accent-foreground">D</span>
         </div>
         <span className="text-[17px] font-semibold tracking-tight text-foreground">
-          Jarvis
+          Dobby
         </span>
       </Link>
 

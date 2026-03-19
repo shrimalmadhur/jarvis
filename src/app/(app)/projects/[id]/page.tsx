@@ -328,7 +328,7 @@ export default function ProjectDetailPage() {
         ) : (
           <div className="animate-fade-in flex flex-col items-center justify-center py-20 text-center border border-dashed border-border">
             <div className="text-[14px] font-mono text-muted-foreground space-y-1">
-              <p className="text-muted">$ jarvis --list-agents</p>
+              <p className="text-muted">$ dobby --list-agents</p>
               <p>0 agents registered</p>
               <p className="text-muted mt-3">run <span className="text-accent">&quot;spawn agent&quot;</span> to create one</p>
             </div>

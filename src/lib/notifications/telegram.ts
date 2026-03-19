@@ -205,7 +205,7 @@ export async function testTelegramNotification(
   try {
     await sendTelegramMessage(
       { botToken, chatId },
-      "Jarvis test notification \u2014 connection successful."
+      "Dobby test notification \u2014 connection successful."
     );
     return { success: true };
   } catch (error) {

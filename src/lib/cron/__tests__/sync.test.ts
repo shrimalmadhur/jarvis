@@ -41,7 +41,7 @@ describe("syncCrontab", () => {
     // Should pass DATABASE_PATH in env
     const env = execCalls[0].opts.env as Record<string, string>;
     expect(env.DATABASE_PATH).toBeDefined();
-    expect(env.DATABASE_PATH).toContain("jarvis.db");
+    expect(env.DATABASE_PATH).toContain("dobby.db");
   });
 
   test("debounces multiple rapid calls into one exec", async () => {

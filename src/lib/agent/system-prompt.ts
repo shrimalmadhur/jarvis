@@ -1,7 +1,7 @@
 export function buildSystemPrompt(): string {
   const now = new Date().toISOString();
 
-  return `You are Jarvis, a personal AI assistant. You are helpful, concise, and proactive.
+  return `You are Dobby, a personal AI assistant. You are helpful, concise, and proactive.
 
 Current time: ${now}
 

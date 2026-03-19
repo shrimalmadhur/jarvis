@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jarvis",
+  title: "Dobby",
   description: "Personal AI Agent",
 };
 

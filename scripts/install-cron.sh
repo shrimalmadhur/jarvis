@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate and install crontab entries for Jarvis agents (from DB).
+# Generate and install crontab entries for Dobby agents (from DB).
 # Usage: bash scripts/install-cron.sh [--dry-run] [--run-dir DIR]
 
 set -euo pipefail
@@ -11,8 +11,8 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="/etc/jarvis/env"
-LOG_DIR="/var/log/jarvis"
+ENV_FILE="/etc/dobby/env"
+LOG_DIR="/var/log/dobby"
 DRY_RUN=false
 RUN_DIR=""
 
@@ -30,7 +30,7 @@ done
 # RUN_DIR is the directory used in cron `cd` commands.
 # Defaults to PROJECT_DIR (derived from script location).
 # Callers like install.sh / upgrade.sh should pass --run-dir to point at the
-# production install directory (/usr/local/lib/jarvis).
+# production install directory (/usr/local/lib/dobby).
 RUN_DIR="${RUN_DIR:-$PROJECT_DIR}"
 
 # Ensure log directory exists
@@ -49,7 +49,7 @@ BUN_STDERR_FILE=$(mktemp)
 AGENTS_TSV=$(cd "$PROJECT_DIR" && bun -e "
   const { Database } = require('bun:sqlite');
   const path = require('path');
-  const dbPath = process.env.DATABASE_PATH || path.join('data', 'jarvis.db');
+  const dbPath = process.env.DATABASE_PATH || path.join('data', 'dobby.db');
   const db = new Database(dbPath, { readonly: true });
   const rows = db.prepare('SELECT id, name, schedule FROM agents WHERE enabled = 1 AND schedule IS NOT NULL').all();
   for (const r of rows) {
@@ -76,8 +76,8 @@ fi
 
 # Collect cron entries
 CRON_ENTRIES=""
-MARKER_START="# --- Jarvis Agents (auto-generated) ---"
-MARKER_END="# --- End Jarvis Agents ---"
+MARKER_START="# --- Dobby Agents (auto-generated) ---"
+MARKER_END="# --- End Dobby Agents ---"
 
 while IFS=$'\t' read -r agent_id agent_name schedule; do
   if [[ -z "$schedule" ]]; then
@@ -116,9 +116,9 @@ if $DRY_RUN; then
   exit 0
 fi
 
-# Get existing crontab, remove old Jarvis block, add new one
+# Get existing crontab, remove old Dobby/Jarvis blocks, add new one
 EXISTING=$(crontab -l 2>/dev/null || true)
-CLEANED=$(echo "$EXISTING" | sed "/$MARKER_START/,/$MARKER_END/d")
+CLEANED=$(echo "$EXISTING" | sed "/$MARKER_START/,/$MARKER_END/d" | sed '/# --- Jarvis Agents (auto-generated) ---/,/# --- End Jarvis Agents ---/d')
 NEW_CRONTAB="$CLEANED
 $BLOCK"
 

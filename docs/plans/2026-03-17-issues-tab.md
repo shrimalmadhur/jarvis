@@ -17,7 +17,7 @@
 
 ## Overview
 
-Add an "Issues" tab to Jarvis where users configure repositories (GitHub repo URL + local repo path). Issues arrive via Telegram messages to a **dedicated issues bot** (separate from the notification bot). When an issue arrives, Jarvis autonomously:
+Add an "Issues" tab to Dobby where users configure repositories (GitHub repo URL + local repo path). Issues arrive via Telegram messages to a **dedicated issues bot** (separate from the notification bot). When an issue arrives, Dobby autonomously:
 
 1. Creates a git worktree in the configured repo
 2. Plans the implementation (Claude Code)
@@ -54,7 +54,7 @@ Issue Pipeline Orchestrator (scripts/issue-pipeline.ts)
   ├── Phase 7: PR Creation (claude -p, gh pr create)
   │
   ▼
-Jarvis UI (Issues Tab)
+Dobby UI (Issues Tab)
   ├── Repo config (repo paths, dedicated telegram bot config)
   ├── Issues list with status pipeline
   ├── Issue detail (phases, Q&A thread, session info)
@@ -442,7 +442,7 @@ export async function processTelegramUpdate(
     // Send error back to Telegram
     await sendTelegramNotification(config,
       `❌ Repository "<b>${escapeHtml(parsed.repoName)}</b>" not found. ` +
-      `Available repos: check the Issues tab in Jarvis UI.`
+      `Available repos: check the Issues tab in Dobby UI.`
     );
     return;
   }
@@ -641,9 +641,9 @@ export async function runIssuePipeline(
   const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 40);
   const shortId = issue.id.substring(0, 8);
   const branchName = `issue/${slug}-${shortId}`;
-  const worktreeDir = join(repo.localRepoPath, ".jarvis-worktrees", `${slug}-${shortId}`);
+  const worktreeDir = join(repo.localRepoPath, ".dobby-worktrees", `${slug}-${shortId}`);
 
-  mkdirSync(join(repo.localRepoPath, ".jarvis-worktrees"), { recursive: true });
+  mkdirSync(join(repo.localRepoPath, ".dobby-worktrees"), { recursive: true });
 
   // Handle case where branch already exists (retry scenario)
   try {
@@ -984,8 +984,8 @@ import fs from "node:fs";
 // Load env (same pattern as run-agents.ts)
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync("/etc/jarvis/env")) {
-  dotenv.config({ path: "/etc/jarvis/env" });
+} else if (fs.existsSync("/etc/dobby/env")) {
+  dotenv.config({ path: "/etc/dobby/env" });
 } else if (fs.existsSync(".env")) {
   dotenv.config({ path: ".env" });
 }
@@ -1062,7 +1062,7 @@ async function startPendingPipelines(telegramConfig: { botToken: string; chatId:
 }
 
 async function main() {
-  console.log("Jarvis Issue Poller started");
+  console.log("Dobby Issue Poller started");
 
   const config = await getIssuesTelegramConfig();
   if (!config) {
@@ -1377,17 +1377,17 @@ issue-poller:
 
 **Linux (systemd)** — Add to `scripts/install.sh`:
 
-Create `/etc/systemd/system/jarvis-issues.service`:
+Create `/etc/systemd/system/dobby-issues.service`:
 ```ini
 [Unit]
-Description=Jarvis Issue Poller
-After=jarvis.service
+Description=Dobby Issue Poller
+After=dobby.service
 
 [Service]
 Type=simple
 WorkingDirectory=__INSTALL_DIR__
 ExecStart=__BUN_PATH__ run --tsconfig tsconfig.runner.json scripts/issue-poller.ts
-EnvironmentFile=/etc/jarvis/env
+EnvironmentFile=/etc/dobby/env
 Restart=always
 RestartSec=10
 User=__USER__
@@ -1396,18 +1396,18 @@ User=__USER__
 WantedBy=multi-user.target
 ```
 
-Where `__BUN_PATH__` is resolved the same way as the existing `jarvis.service` (e.g., `$HOME/.bun/bin/bun` or the result of `which bun`).
+Where `__BUN_PATH__` is resolved the same way as the existing `dobby.service` (e.g., `$HOME/.bun/bin/bun` or the result of `which bun`).
 
 **macOS (launchd)** — Add to `scripts/install.sh` macOS branch:
 
-Create `~/Library/LaunchAgents/com.jarvis.issues.plist` following the pattern of the existing `com.jarvis.agent.plist`.
+Create `~/Library/LaunchAgents/com.dobby.issues.plist` following the pattern of the existing `com.dobby.agent.plist`.
 
 **File: `scripts/upgrade.sh`** — Add restart for the new service:
 ```bash
 # Linux
-sudo systemctl restart jarvis-issues || true
+sudo systemctl restart dobby-issues || true
 # macOS
-launchctl kickstart -k gui/$(id -u)/com.jarvis.issues 2>/dev/null || true
+launchctl kickstart -k gui/$(id -u)/com.dobby.issues 2>/dev/null || true
 ```
 
 ---
@@ -1484,7 +1484,7 @@ describe("PHASE_STATUS_MAP", () => {
 2. **Project Structure**: Add new files under `src/lib/issues/`, `scripts/`, API routes, UI pages
 3. **Database**: Add `repositories`, `issues`, `issue_messages` tables
 4. **Environment Variables**: Note that Telegram issues bot is configured via UI (not env vars)
-5. **Deployment**: Document `jarvis-issues.service` and the poller process
+5. **Deployment**: Document `dobby-issues.service` and the poller process
 
 ---
 

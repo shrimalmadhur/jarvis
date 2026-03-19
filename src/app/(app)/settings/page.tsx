@@ -854,7 +854,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="mt-3 text-xs text-muted">
-              Jarvis defaults to Gemini. Configure the default provider in the
+              Dobby defaults to Gemini. Configure the default provider in the
               database&apos;s llm_configs table.
             </p>
           </CardContent>

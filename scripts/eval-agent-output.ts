@@ -12,8 +12,8 @@ import fs from "node:fs";
 // Load env
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync("/etc/jarvis/env")) {
-  dotenv.config({ path: "/etc/jarvis/env" });
+} else if (fs.existsSync("/etc/dobby/env")) {
+  dotenv.config({ path: "/etc/dobby/env" });
 } else if (fs.existsSync(".env")) {
   dotenv.config({ path: ".env" });
 }

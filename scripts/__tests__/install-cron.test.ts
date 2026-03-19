@@ -5,7 +5,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const PROJECT_DIR = join(import.meta.dir, ".tmp-cron-test");
-const DB_PATH = join(PROJECT_DIR, "data", "jarvis.db");
+const DB_PATH = join(PROJECT_DIR, "data", "dobby.db");
 const SCRIPT_PATH = join(import.meta.dir, "..", "install-cron.sh");
 
 const AGENT_ID = "11111111-2222-3333-4444-555555555555";
@@ -93,18 +93,18 @@ describe("install-cron.sh --dry-run", () => {
     expect(output).not.toContain("disabled-id");
   });
 
-  test("includes Jarvis markers for crontab block management", () => {
+  test("includes Dobby markers for crontab block management", () => {
     const output = execSync(
       `DATABASE_PATH="${DB_PATH}" bash "${SCRIPT_PATH}" --dry-run`,
       { cwd: PROJECT_DIR, encoding: "utf-8" }
     );
 
-    expect(output).toContain("# --- Jarvis Agents (auto-generated) ---");
-    expect(output).toContain("# --- End Jarvis Agents ---");
+    expect(output).toContain("# --- Dobby Agents (auto-generated) ---");
+    expect(output).toContain("# --- End Dobby Agents ---");
   });
 
   test("--run-dir overrides the cd target in cron entries", () => {
-    const customDir = "/usr/local/lib/jarvis";
+    const customDir = "/usr/local/lib/dobby";
     const output = execSync(
       `DATABASE_PATH="${DB_PATH}" bash "${SCRIPT_PATH}" --dry-run --run-dir "${customDir}"`,
       { cwd: PROJECT_DIR, encoding: "utf-8" }

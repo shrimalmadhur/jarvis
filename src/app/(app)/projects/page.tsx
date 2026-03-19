@@ -229,7 +229,7 @@ export default function ProjectsPage() {
         {!loading && !error && projects.length === 0 && !showCreate && (
           <div className="animate-fade-in flex flex-col items-center justify-center py-24 text-center">
             <div className="text-[14px] font-mono text-muted-foreground space-y-1">
-              <p className="text-muted">$ jarvis --list-projects</p>
+              <p className="text-muted">$ dobby --list-projects</p>
               <p className="text-muted-foreground">0 projects found</p>
               <p className="text-muted mt-4">run <span className="text-accent">&quot;init new&quot;</span> to create your first project</p>
             </div>

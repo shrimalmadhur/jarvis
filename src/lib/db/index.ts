@@ -7,7 +7,7 @@ import fs from "node:fs";
 
 const dbPath =
   process.env.DATABASE_PATH ||
-  path.join(process.cwd(), "data", "jarvis.db");
+  path.join(process.cwd(), "data", "dobby.db");
 
 // Ensure the data directory exists
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });

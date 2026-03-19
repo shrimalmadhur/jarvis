@@ -30,7 +30,7 @@ export class MCPClientManager {
     });
 
     const client = new Client(
-      { name: "jarvis", version: "1.0.0" },
+      { name: "dobby", version: "1.0.0" },
       { capabilities: {} }
     );
 

@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 
-const COOKIE_NAME = "jarvis_session";
+const COOKIE_NAME = "dobby_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
 
 function getPassword(): string | null {
-  return process.env.JARVIS_PASSWORD || null;
+  return process.env.DOBBY_PASSWORD || null;
 }
 
 /**

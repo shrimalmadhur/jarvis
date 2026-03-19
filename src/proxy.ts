@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const COOKIE_NAME = "jarvis_session";
+const COOKIE_NAME = "dobby_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
 // Paths that don't require auth
@@ -60,17 +60,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // If no JARVIS_PASSWORD is set, skip auth entirely
-  const password = process.env.JARVIS_PASSWORD;
+  // If no DOBBY_PASSWORD is set, skip auth entirely
+  const password = process.env.DOBBY_PASSWORD;
   if (!password) {
     return NextResponse.next();
   }
 
-  // For API routes, allow bearer token auth via JARVIS_API_SECRET
+  // For API routes, allow bearer token auth via DOBBY_API_SECRET
   // (used by Claude Code hooks and cron scripts calling the API)
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const authHeader = request.headers.get("authorization");
-    const apiSecret = process.env.JARVIS_API_SECRET;
+    const apiSecret = process.env.DOBBY_API_SECRET;
     if (apiSecret && authHeader === `Bearer ${apiSecret}`) {
       return NextResponse.next();
     }

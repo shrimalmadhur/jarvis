@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full Ubuntu setup script for Jarvis.
+# Full Ubuntu setup script for Dobby.
 # Run as your regular user (NOT root). It will use sudo where needed.
 #
 # Usage:
@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "============================================"
-echo "  Jarvis Setup for Ubuntu"
+echo "  Dobby Setup for Ubuntu"
 echo "============================================"
 echo ""
 
@@ -94,28 +94,28 @@ green "  Build complete"
 echo ""
 echo "Step $($UPGRADE && echo 5 || echo 4): Setting up directories..."
 mkdir -p "$REPO_DIR/data"
-sudo mkdir -p /var/log/jarvis
-sudo chown "$(whoami)" /var/log/jarvis
+sudo mkdir -p /var/log/dobby
+sudo chown "$(whoami)" /var/log/dobby
 green "  Directories ready"
 
 # ── 6. Environment file ────────────────────────
 echo ""
-ENV_FILE="/etc/jarvis/env"
+ENV_FILE="/etc/dobby/env"
 if [ ! -f "$ENV_FILE" ]; then
     echo "Step $($UPGRADE && echo 7 || echo 6): Creating environment file..."
-    sudo mkdir -p /etc/jarvis
+    sudo mkdir -p /etc/dobby
     sudo tee "$ENV_FILE" > /dev/null << 'ENVEOF'
-# Jarvis Environment Configuration
+# Dobby Environment Configuration
 
 # Required - get from https://aistudio.google.com/apikey
 GEMINI_API_KEY=
 
 # Web UI password (set to enable auth, leave empty to disable)
-JARVIS_PASSWORD=
+DOBBY_PASSWORD=
 
 # API secret for hook/script access (used by Claude Code hooks, cron scripts)
 # Generate with: openssl rand -hex 32
-JARVIS_API_SECRET=
+DOBBY_API_SECRET=
 
 # Optional providers
 # OPENAI_API_KEY=
@@ -135,22 +135,56 @@ fi
 # ── 8. Systemd service (web UI) ────────────────
 echo ""
 echo "Step $($UPGRADE && echo 8 || echo 7): Installing systemd service..."
-INSTALL_DIR="/usr/local/lib/jarvis"
+INSTALL_DIR="/usr/local/lib/dobby"
 STANDALONE_DIR="$REPO_DIR/.next/standalone"
 NODE_BIN_DIR="$(dirname "$(command -v node)")"
 
 # Stop existing service before deploy (if running)
+sudo systemctl stop dobby 2>/dev/null || true
+# Also stop old jarvis service if migrating
 sudo systemctl stop jarvis 2>/dev/null || true
+
+# Migrate from old jarvis installation if needed
+OLD_INSTALL_DIR="/usr/local/lib/jarvis"
+if [ -d "$OLD_INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR" ]; then
+    echo "Migrating from jarvis to dobby..."
+    sudo mv "$OLD_INSTALL_DIR" "$INSTALL_DIR"
+    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
+        sudo mv "$INSTALL_DIR/data/jarvis.db" "$INSTALL_DIR/data/dobby.db"
+        [ -f "$INSTALL_DIR/data/jarvis.db-wal" ] && sudo mv "$INSTALL_DIR/data/jarvis.db-wal" "$INSTALL_DIR/data/dobby.db-wal"
+        [ -f "$INSTALL_DIR/data/jarvis.db-shm" ] && sudo mv "$INSTALL_DIR/data/jarvis.db-shm" "$INSTALL_DIR/data/dobby.db-shm"
+        green "  Database migrated to dobby.db"
+    fi
+    # Remove old jarvis service
+    if [ -f "/etc/systemd/system/jarvis.service" ]; then
+        sudo systemctl disable jarvis 2>/dev/null || true
+        sudo rm -f "/etc/systemd/system/jarvis.service"
+        sudo systemctl daemon-reload
+        green "  Old jarvis service removed"
+    fi
+fi
+
+# Migrate env directory if old one exists
+if [ -d "/etc/jarvis" ] && [ ! -d "/etc/dobby" ]; then
+    echo "Migrating config from /etc/jarvis to /etc/dobby..."
+    sudo mv /etc/jarvis /etc/dobby
+    if [ -f "$ENV_FILE" ]; then
+        sudo sed -i 's/JARVIS_PASSWORD/DOBBY_PASSWORD/g' "$ENV_FILE"
+        sudo sed -i 's/JARVIS_API_SECRET/DOBBY_API_SECRET/g' "$ENV_FILE"
+        sudo sed -i 's/# Jarvis/# Dobby/g' "$ENV_FILE"
+    fi
+    green "  Config migrated to /etc/dobby"
+fi
 
 if [ -d "$INSTALL_DIR" ]; then
     # Backup database before re-install/upgrade (service is stopped above)
-    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
-        BACKUP="$INSTALL_DIR/data/jarvis.db.bak.$(date +%s)"
-        sqlite3 "$INSTALL_DIR/data/jarvis.db" ".backup '$BACKUP'"
+    if [ -f "$INSTALL_DIR/data/dobby.db" ]; then
+        BACKUP="$INSTALL_DIR/data/dobby.db.bak.$(date +%s)"
+        sqlite3 "$INSTALL_DIR/data/dobby.db" ".backup '$BACKUP'"
         sudo chmod 600 "$BACKUP"
         green "  Database backed up to $BACKUP"
         # Keep only the 3 most recent backups
-        ls -t "$INSTALL_DIR/data/jarvis.db.bak."* 2>/dev/null | tail -n +4 | sudo xargs rm -f 2>/dev/null
+        ls -t "$INSTALL_DIR/data/dobby.db.bak."* 2>/dev/null | tail -n +4 | sudo xargs rm -f 2>/dev/null
     fi
     # Preserve data/ (SQLite database) on re-install/upgrade
     sudo find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
@@ -197,24 +231,24 @@ sudo chown -R "$(whoami)" "$INSTALL_DIR"
 sudo sed -e "s|__USER__|$(whoami)|g" \
     -e "s|__GROUP__|$(id -gn)|g" \
     -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
-    "$REPO_DIR/jarvis.service" > /tmp/jarvis.service
-sudo mv /tmp/jarvis.service /etc/systemd/system/jarvis.service
+    "$REPO_DIR/dobby.service" > /tmp/dobby.service
+sudo mv /tmp/dobby.service /etc/systemd/system/dobby.service
 
 sudo systemctl daemon-reload
-sudo systemctl enable jarvis
-sudo systemctl restart jarvis
+sudo systemctl enable dobby
+sudo systemctl restart dobby
 
 sleep 2
-if sudo systemctl is-active --quiet jarvis; then
-    green "  Jarvis web UI running on port 7749"
+if sudo systemctl is-active --quiet dobby; then
+    green "  Dobby web UI running on port 7749"
 else
-    red "  Service failed to start. Check: sudo journalctl -u jarvis -n 30"
+    red "  Service failed to start. Check: sudo journalctl -u dobby -n 30"
 fi
 
 # ── 9. Cron jobs for agents ───────────────────
 echo ""
 echo "Step $($UPGRADE && echo 9 || echo 8): Installing cron jobs..."
-DATABASE_PATH="$INSTALL_DIR/data/jarvis.db" bash "$REPO_DIR/scripts/install-cron.sh" --run-dir "$INSTALL_DIR"
+DATABASE_PATH="$INSTALL_DIR/data/dobby.db" bash "$REPO_DIR/scripts/install-cron.sh" --run-dir "$INSTALL_DIR"
 
 # ── Done ────────────────────────────────────────
 echo ""
@@ -224,21 +258,21 @@ echo "============================================"
 echo ""
 echo "Next steps:"
 if grep -q '^GEMINI_API_KEY=$' "$ENV_FILE" 2>/dev/null; then
-    yellow "  1. Edit /etc/jarvis/env with your API keys:"
-    echo "     sudo nano /etc/jarvis/env"
+    yellow "  1. Edit /etc/dobby/env with your API keys:"
+    echo "     sudo nano /etc/dobby/env"
     echo ""
     yellow "  2. Add Telegram bot tokens for agents:"
     echo "     FOOD_FACTS_TELEGRAM_BOT_TOKEN=<token>"
     echo "     FOOD_FACTS_TELEGRAM_CHAT_ID=<chat_id>"
     echo ""
     yellow "  3. Restart after editing:"
-    echo "     sudo systemctl restart jarvis"
+    echo "     sudo systemctl restart dobby"
 fi
 echo ""
 echo "Useful commands:"
-echo "  sudo systemctl status jarvis          # Web UI status"
-echo "  sudo journalctl -u jarvis -f          # Web UI logs"
-echo "  tail -f /var/log/jarvis/agents.log    # Agent cron logs"
+echo "  sudo systemctl status dobby          # Web UI status"
+echo "  sudo journalctl -u dobby -f          # Web UI logs"
+echo "  tail -f /var/log/dobby/agents.log    # Agent cron logs"
 echo "  crontab -l                            # View scheduled agents"
 echo "  bun run scripts/run-agents.ts --list     # List agents"
 echo "  bun run scripts/run-agents.ts food-facts  # Test run"

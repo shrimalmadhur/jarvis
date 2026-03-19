@@ -6,9 +6,9 @@ set -euo pipefail
 export PATH="__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 
 # Source environment variables
-if [ -f /etc/jarvis/env ]; then
+if [ -f /etc/dobby/env ]; then
     set -a
-    source /etc/jarvis/env
+    source /etc/dobby/env
     set +a
 fi
 

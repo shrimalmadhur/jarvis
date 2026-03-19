@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.jarvis.agent</string>
+    <string>com.dobby.agent</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
@@ -21,8 +21,8 @@
     <key>ThrottleInterval</key>
     <integer>5</integer>
     <key>StandardOutPath</key>
-    <string>/var/log/jarvis/jarvis.log</string>
+    <string>/var/log/dobby/dobby.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/jarvis/jarvis.error.log</string>
+    <string>/var/log/dobby/dobby.error.log</string>
 </dict>
 </plist>

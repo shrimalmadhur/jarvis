@@ -1,5 +1,5 @@
 [Unit]
-Description=Jarvis Personal AI Agent
+Description=Dobby Personal AI Agent
 After=network-online.target
 Wants=network-online.target
 
@@ -10,7 +10,7 @@ Group=__GROUP__
 
 WorkingDirectory=__INSTALL_DIR__
 
-EnvironmentFile=/etc/jarvis/env
+EnvironmentFile=/etc/dobby/env
 Environment=NODE_ENV=production
 Environment=PORT=7749
 Environment=HOSTNAME=0.0.0.0
@@ -24,7 +24,7 @@ StartLimitBurst=3
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=jarvis
+SyslogIdentifier=dobby
 
 [Install]
 WantedBy=multi-user.target

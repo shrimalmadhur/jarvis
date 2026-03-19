@@ -1,4 +1,4 @@
-# Jarvis - Personal AI Agent
+# Dobby - Personal AI Agent
 
 Local-first personal AI agent with web chat UI. No auth, no billing, single user.
 Uses MCP (Model Context Protocol) for external service integrations and supports multiple LLM providers.
@@ -14,7 +14,7 @@ bun run tsc --noEmit # Type check
 
 - **Framework**: Next.js 16 App Router, React 19, TypeScript
 - **Styling**: Tailwind CSS v4 (uses `@theme inline` in globals.css, NOT v3 config files)
-- **Database**: SQLite via `better-sqlite3` + `drizzle-orm` (local file at `data/jarvis.db`)
+- **Database**: SQLite via `better-sqlite3` + `drizzle-orm` (local file at `data/dobby.db`)
 - **LLM Providers**: Gemini (default: `gemini-3-flash-preview`), OpenAI, Anthropic
 - **Tools**: MCP servers (STDIO transport) + built-in filesystem/time tools
 - **Runtime**: Bun (package manager, script runner, production server)
@@ -88,7 +88,7 @@ src/
     agent/
       core.ts                         # Agentic loop, tool dispatch, MCP connection management
       builtin-tools.ts                # Built-in tools: list_directory, read_file, write_file, get_file_info, get_current_time
-      system-prompt.ts                # Jarvis system prompt
+      system-prompt.ts                # Dobby system prompt
       conversation-store.ts           # CRUD for conversations/messages
       types.ts                        # AgentRequest, AgentResponse
     ai/
@@ -128,12 +128,12 @@ scripts/
     migrate-fs-agents.ts              # One-time: migrate filesystem agents to DB
     install-cron.sh                   # Generate crontab entries from agent configs
 data/
-    jarvis.db                         # SQLite database (gitignored)
+    dobby.db                          # SQLite database (gitignored)
 ```
 
 ## Database
 
-SQLite via `better-sqlite3`. Schema defined in `src/lib/db/schema.ts`. DB file at `data/jarvis.db` (auto-created).
+SQLite via `better-sqlite3`. Schema defined in `src/lib/db/schema.ts`. DB file at `data/dobby.db` (auto-created).
 
 **Tables**: `conversations`, `messages`, `agent_tasks`, `mcp_servers`, `llm_configs`, `notification_configs`, `projects`, `agents`, `agent_runs`, `claude_sessions`, `claude_session_timeline`, `claude_session_sub_agents`, `claude_session_tasks`
 
@@ -180,22 +180,22 @@ Telegram notifications are configured per-agent via the UI. Config stored in `no
 
 ## Deployment
 
-Jarvis is deployed as a system service via `make install` (first time) and `make upgrade` (updates).
+Dobby is deployed as a system service via `make install` (first time) and `make upgrade` (updates).
 
-- **Install dir**: `/usr/local/lib/jarvis/`
-- **Production DB**: `/usr/local/lib/jarvis/data/jarvis.db` (preserved across upgrades)
-- **Env config**: `/etc/jarvis/env`
-- **Service**: systemd (`jarvis`) on Linux, launchd (`com.jarvis.agent`) on macOS
+- **Install dir**: `/usr/local/lib/dobby/`
+- **Production DB**: `/usr/local/lib/dobby/data/dobby.db` (preserved across upgrades)
+- **Env config**: `/etc/dobby/env`
+- **Service**: systemd (`dobby`) on Linux, launchd (`com.dobby.agent`) on macOS
 
-When debugging data issues, always query the **installation DB** (`/usr/local/lib/jarvis/data/jarvis.db`), not the repo-local `data/jarvis.db`.
+When debugging data issues, always query the **installation DB** (`/usr/local/lib/dobby/data/dobby.db`), not the repo-local `data/dobby.db`.
 
 ## Environment Variables
 
 ```
-DATABASE_PATH=data/jarvis.db          # SQLite path (optional, defaults to data/jarvis.db)
+DATABASE_PATH=data/dobby.db          # SQLite path (optional, defaults to data/dobby.db)
 GEMINI_API_KEY=...                    # Google Gemini (required for default provider)
-JARVIS_PASSWORD=...                   # Web UI password (optional, no auth if unset)
-JARVIS_API_SECRET=...                 # API bearer token for hooks/scripts (optional)
+DOBBY_PASSWORD=...                   # Web UI password (optional, no auth if unset)
+DOBBY_API_SECRET=...                 # API bearer token for hooks/scripts (optional)
 OPENAI_API_KEY=...                    # OpenAI (optional)
 ANTHROPIC_API_KEY=...                 # Anthropic (optional)
 

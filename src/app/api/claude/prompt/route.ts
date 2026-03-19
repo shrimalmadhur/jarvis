@@ -9,18 +9,18 @@ const MAX_CONCURRENT = 3;
  * POST /api/claude/prompt
  *
  * Spawns `claude -p` CLI to generate a response, streamed back via SSE.
- * Requires JARVIS_PASSWORD or JARVIS_API_SECRET if configured.
+ * Requires DOBBY_PASSWORD or DOBBY_API_SECRET if configured.
  * Body: { prompt: string, systemPrompt?: string, model?: string }
  */
 export async function POST(request: Request) {
   // Auth gate: require password/secret if configured
-  const password = process.env.JARVIS_PASSWORD;
-  const apiSecret = process.env.JARVIS_API_SECRET;
+  const password = process.env.DOBBY_PASSWORD;
+  const apiSecret = process.env.DOBBY_API_SECRET;
   if (password || apiSecret) {
     const authHeader = request.headers.get("authorization");
     const cookieHeader = request.headers.get("cookie");
     const hasValidBearer = authHeader && apiSecret && authHeader === `Bearer ${apiSecret}`;
-    const hasValidCookie = cookieHeader && password && cookieHeader.includes(`jarvis-auth=${password}`);
+    const hasValidCookie = cookieHeader && password && cookieHeader.includes(`dobby-auth=${password}`);
     if (!hasValidBearer && !hasValidCookie) {
       // Also accept password in request body or referer-based trust for same-origin
       const origin = request.headers.get("origin") || request.headers.get("referer");

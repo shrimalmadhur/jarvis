@@ -15,7 +15,7 @@ export function syncCrontab(): void {
     const cwd = process.cwd();
     const scriptPath = resolve(cwd, "scripts", "install-cron.sh");
 
-    const dbPath = process.env.DATABASE_PATH || join(cwd, "data", "jarvis.db");
+    const dbPath = process.env.DATABASE_PATH || join(cwd, "data", "dobby.db");
     execFile("bash", [scriptPath, "--run-dir", cwd], {
       timeout: 15_000,
       env: { ...process.env, DATABASE_PATH: dbPath },

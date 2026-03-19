@@ -5,16 +5,16 @@ set -euo pipefail
 export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SERVICE_NAME="jarvis"
-ENV_DIR="/etc/jarvis"
+SERVICE_NAME="dobby"
+ENV_DIR="/etc/dobby"
 ENV_FILE="${ENV_DIR}/env"
 PORT=7749
 OS="$(uname -s)"
 
 # macOS launchd identifiers
-PLIST_LABEL="com.jarvis.agent"
-LOG_DIR="/var/log/jarvis"
-INSTALL_DIR="/usr/local/lib/jarvis"
+PLIST_LABEL="com.dobby.agent"
+LOG_DIR="/var/log/dobby"
+INSTALL_DIR="/usr/local/lib/dobby"
 
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -153,8 +153,13 @@ echo "Stopping existing service (if running)..."
 if [ "$OS" = "Darwin" ]; then
     launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
     launchctl bootout system/"$PLIST_LABEL" 2>/dev/null || true
+    # Also stop old jarvis service if migrating
+    launchctl bootout gui/"$ACTUAL_UID"/com.jarvis.agent 2>/dev/null || true
+    launchctl bootout system/com.jarvis.agent 2>/dev/null || true
 else
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    # Also stop old jarvis service if migrating
+    systemctl stop jarvis 2>/dev/null || true
 fi
 
 # --- Install dependencies and build ---
@@ -198,18 +203,56 @@ cp -r "$REPO_DIR/.next/static" "$STANDALONE_DIR/.next/static"
 # Fix ownership — cp/mkdir ran as root, but the service runs as $ACTUAL_USER
 chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$REPO_DIR/.next"
 
+# --- Migrate from old jarvis installation if it exists ---
+OLD_INSTALL_DIR="/usr/local/lib/jarvis"
+if [ -d "$OLD_INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR" ]; then
+    echo ""
+    echo "Migrating from jarvis to dobby..."
+    # Move the old installation to the new location
+    mv "$OLD_INSTALL_DIR" "$INSTALL_DIR"
+    # Rename the database file if it exists
+    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
+        mv "$INSTALL_DIR/data/jarvis.db" "$INSTALL_DIR/data/dobby.db"
+        # Move WAL and SHM files if they exist
+        [ -f "$INSTALL_DIR/data/jarvis.db-wal" ] && mv "$INSTALL_DIR/data/jarvis.db-wal" "$INSTALL_DIR/data/dobby.db-wal"
+        [ -f "$INSTALL_DIR/data/jarvis.db-shm" ] && mv "$INSTALL_DIR/data/jarvis.db-shm" "$INSTALL_DIR/data/dobby.db-shm"
+        green "  Database migrated to dobby.db"
+    fi
+fi
+
+# Migrate env directory if old one exists
+OLD_ENV_DIR="/etc/jarvis"
+if [ -d "$OLD_ENV_DIR" ] && [ ! -d "$ENV_DIR" ]; then
+    echo "Migrating config from /etc/jarvis to /etc/dobby..."
+    mv "$OLD_ENV_DIR" "$ENV_DIR"
+    # Update env var names in the env file
+    if [ -f "$ENV_FILE" ]; then
+        sed -i 's/JARVIS_PASSWORD/DOBBY_PASSWORD/g' "$ENV_FILE"
+        sed -i 's/JARVIS_API_SECRET/DOBBY_API_SECRET/g' "$ENV_FILE"
+        sed -i 's/# Jarvis/# Dobby/g' "$ENV_FILE"
+    fi
+    green "  Config migrated to /etc/dobby"
+fi
+
+# Migrate log directory
+OLD_LOG_DIR="/var/log/jarvis"
+if [ -d "$OLD_LOG_DIR" ] && [ ! -d "$LOG_DIR" ]; then
+    mv "$OLD_LOG_DIR" "$LOG_DIR"
+    green "  Logs migrated to /var/log/dobby"
+fi
+
 # --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
 if [ -d "$INSTALL_DIR" ]; then
     # Backup database before re-install (service is already stopped above)
-    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
-        BACKUP="$INSTALL_DIR/data/jarvis.db.bak.$(date +%s)"
-        sqlite3 "$INSTALL_DIR/data/jarvis.db" ".backup '$BACKUP'"
+    if [ -f "$INSTALL_DIR/data/dobby.db" ]; then
+        BACKUP="$INSTALL_DIR/data/dobby.db.bak.$(date +%s)"
+        sqlite3 "$INSTALL_DIR/data/dobby.db" ".backup '$BACKUP'"
         chmod 600 "$BACKUP"
         green "  Database backed up to $BACKUP"
         # Keep only the 3 most recent backups
-        ls -t "$INSTALL_DIR/data/jarvis.db.bak."* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+        ls -t "$INSTALL_DIR/data/dobby.db.bak."* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
     fi
     # Preserve data/ (SQLite database) on re-install
     find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
@@ -261,24 +304,24 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "Creating environment file template at $ENV_FILE..."
     mkdir -p "$ENV_DIR"
     cat > "$ENV_FILE" << 'ENVEOF'
-# Jarvis Environment Configuration
+# Dobby Environment Configuration
 # Edit this file and restart the service (see install output for commands)
 
 # Required
 GEMINI_API_KEY=
 
 # Web UI password (set to enable auth, leave empty to disable)
-JARVIS_PASSWORD=
+DOBBY_PASSWORD=
 
 # API secret for hook/script access (used by Claude Code hooks, cron scripts)
 # Generate with: openssl rand -hex 32
-JARVIS_API_SECRET=
+DOBBY_API_SECRET=
 
 # Optional - uncomment and set if using these providers
 # OPENAI_API_KEY=
 # ANTHROPIC_API_KEY=
 
-# Optional - SQLite database path (defaults to data/jarvis.db relative to install dir)
+# Optional - SQLite database path (defaults to data/dobby.db relative to install dir)
 # DATABASE_PATH=
 
 # Per-agent Telegram bots (for cron runner)
@@ -290,6 +333,19 @@ ENVEOF
     yellow "  Created $ENV_FILE — you must fill in GEMINI_API_KEY"
 else
     green "  $ENV_FILE already exists, keeping existing configuration"
+fi
+
+# --- Disable old jarvis service if it exists ---
+if [ "$OS" = "Darwin" ]; then
+    OLD_PLIST="$ACTUAL_HOME/Library/LaunchAgents/com.jarvis.agent.plist"
+    [ -f "$OLD_PLIST" ] && rm -f "$OLD_PLIST"
+else
+    if [ -f "/etc/systemd/system/jarvis.service" ]; then
+        systemctl disable jarvis 2>/dev/null || true
+        rm -f "/etc/systemd/system/jarvis.service"
+        systemctl daemon-reload
+        green "  Old jarvis service removed"
+    fi
 fi
 
 # --- Install service (OS-specific) ---
@@ -313,7 +369,7 @@ if [ "$OS" = "Darwin" ]; then
     rm -f "/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 
     sed -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
-        "$REPO_DIR/jarvis.plist" > "$PLIST_PATH"
+        "$REPO_DIR/dobby.plist" > "$PLIST_PATH"
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$PLIST_PATH"
 
     launchctl bootout gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null || true
@@ -322,13 +378,13 @@ if [ "$OS" = "Darwin" ]; then
     sleep 2
     if launchctl print gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then
         green ""
-        green "Jarvis is installed and running on port $PORT"
+        green "Dobby is installed and running on port $PORT"
         green ""
         echo "Useful commands:"
         echo "  launchctl print gui/$ACTUAL_UID/$PLIST_LABEL   # Check status"
         echo "  launchctl kickstart -k gui/$ACTUAL_UID/$PLIST_LABEL  # Restart"
         echo "  launchctl kill SIGTERM gui/$ACTUAL_UID/$PLIST_LABEL  # Stop"
-        echo "  tail -f $LOG_DIR/jarvis.log                    # Follow logs"
+        echo "  tail -f $LOG_DIR/dobby.log                    # Follow logs"
         echo ""
         if grep -q '^GEMINI_API_KEY=$' "$ENV_FILE" 2>/dev/null; then
             yellow "Next step: Edit $ENV_FILE with your API keys, then restart:"
@@ -336,7 +392,7 @@ if [ "$OS" = "Darwin" ]; then
         fi
     else
         red "Service failed to start. Check logs:"
-        red "  cat $LOG_DIR/jarvis.error.log"
+        red "  cat $LOG_DIR/dobby.error.log"
     fi
 else
     # --- Linux: systemd ---
@@ -348,7 +404,7 @@ else
     sed -e "s|__USER__|$ACTUAL_USER|g" \
         -e "s|__GROUP__|$ACTUAL_GROUP|g" \
         -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
-        "$REPO_DIR/jarvis.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
+        "$REPO_DIR/dobby.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
 
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
@@ -360,21 +416,21 @@ else
     sleep 2
     if systemctl is-active --quiet "$SERVICE_NAME"; then
         green ""
-        green "Jarvis is installed and running on port $PORT"
+        green "Dobby is installed and running on port $PORT"
         green ""
         echo "Useful commands:"
-        echo "  sudo systemctl status jarvis    # Check status"
-        echo "  sudo systemctl restart jarvis   # Restart"
-        echo "  sudo systemctl stop jarvis      # Stop"
-        echo "  sudo journalctl -u jarvis -f    # Follow logs"
+        echo "  sudo systemctl status dobby    # Check status"
+        echo "  sudo systemctl restart dobby   # Restart"
+        echo "  sudo systemctl stop dobby      # Stop"
+        echo "  sudo journalctl -u dobby -f    # Follow logs"
         echo ""
         if grep -q '^GEMINI_API_KEY=$' "$ENV_FILE" 2>/dev/null; then
             yellow "Next step: Edit $ENV_FILE with your API keys, then restart:"
-            yellow "  sudo systemctl restart jarvis"
+            yellow "  sudo systemctl restart dobby"
         fi
     else
         red "Service failed to start. Check logs:"
-        red "  sudo journalctl -u jarvis -n 50"
+        red "  sudo journalctl -u dobby -n 50"
     fi
 fi
 
@@ -383,7 +439,9 @@ fi
 if [ "$OS" = "Linux" ]; then
     echo ""
     echo "Configuring sudo for agent runners..."
-    SUDOERS_FILE="/etc/sudoers.d/jarvis-agent"
+    SUDOERS_FILE="/etc/sudoers.d/dobby-agent"
+    # Clean up old jarvis sudoers file
+    [ -f "/etc/sudoers.d/jarvis-agent" ] && rm -f "/etc/sudoers.d/jarvis-agent"
     # Only grant NOPASSWD for repo-based package managers actually present.
     # Deliberately excludes dpkg/rpm — they install arbitrary local files
     # (including post-install scripts as root) with no provenance check.
@@ -397,7 +455,7 @@ if [ "$OS" = "Linux" ]; then
     if [ -z "$SUDOERS_RULES" ]; then
         yellow "  No supported package manager found, skipping sudoers"
     else
-        printf "# Allow Jarvis agents to install packages without a password prompt.\n# Needed because agent subprocesses run non-interactively (no TTY).\n%b" "$SUDOERS_RULES" > "$SUDOERS_FILE"
+        printf "# Allow Dobby agents to install packages without a password prompt.\n# Needed because agent subprocesses run non-interactively (no TTY).\n%b" "$SUDOERS_RULES" > "$SUDOERS_FILE"
     fi
     chmod 440 "$SUDOERS_FILE"
     if visudo -cf "$SUDOERS_FILE" > /dev/null 2>&1; then
@@ -411,4 +469,4 @@ fi
 # --- Install agent cron jobs ---
 echo ""
 echo "Installing agent cron jobs..."
-sudo -u "$ACTUAL_USER" env "DATABASE_PATH=$INSTALL_DIR/data/jarvis.db" bash "$REPO_DIR/scripts/install-cron.sh" --run-dir "$INSTALL_DIR"
+sudo -u "$ACTUAL_USER" env "DATABASE_PATH=$INSTALL_DIR/data/dobby.db" bash "$REPO_DIR/scripts/install-cron.sh" --run-dir "$INSTALL_DIR"

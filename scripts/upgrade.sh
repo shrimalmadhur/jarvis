@@ -5,15 +5,15 @@ set -euo pipefail
 export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SERVICE_NAME="jarvis"
+SERVICE_NAME="dobby"
 OS="$(uname -s)"
 ACTUAL_USER="$(whoami)"
 ACTUAL_GROUP="$(id -gn "$ACTUAL_USER")"
 
 # macOS launchd identifiers
-PLIST_LABEL="com.jarvis.agent"
-LOG_DIR="/var/log/jarvis"
-INSTALL_DIR="/usr/local/lib/jarvis"
+PLIST_LABEL="com.dobby.agent"
+LOG_DIR="/var/log/dobby"
+INSTALL_DIR="/usr/local/lib/dobby"
 
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -190,18 +190,38 @@ if [ ! -d "$LOG_DIR" ]; then
     fi
 fi
 
+# --- Migrate from old jarvis installation if needed ---
+OLD_INSTALL_DIR="/usr/local/lib/jarvis"
+if [ -d "$OLD_INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR" ]; then
+    echo ""
+    echo "Migrating from jarvis to dobby..."
+    sudo mv "$OLD_INSTALL_DIR" "$INSTALL_DIR"
+    if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
+        mv "$INSTALL_DIR/data/jarvis.db" "$INSTALL_DIR/data/dobby.db"
+        [ -f "$INSTALL_DIR/data/jarvis.db-wal" ] && mv "$INSTALL_DIR/data/jarvis.db-wal" "$INSTALL_DIR/data/dobby.db-wal"
+        [ -f "$INSTALL_DIR/data/jarvis.db-shm" ] && mv "$INSTALL_DIR/data/jarvis.db-shm" "$INSTALL_DIR/data/dobby.db-shm"
+        green "  Database migrated to dobby.db"
+    fi
+    # Disable old jarvis service
+    if [ "$OS" != "Darwin" ] && [ -f "/etc/systemd/system/jarvis.service" ]; then
+        sudo systemctl disable jarvis 2>/dev/null || true
+        sudo rm -f "/etc/systemd/system/jarvis.service"
+        sudo systemctl daemon-reload
+    fi
+fi
+
 # --- Deploy to install directory ---
 echo ""
 echo "Deploying to $INSTALL_DIR..."
 
 # Backup database before deploying (service is already stopped above)
-if [ -f "$INSTALL_DIR/data/jarvis.db" ]; then
-    BACKUP="$INSTALL_DIR/data/jarvis.db.bak.$(date +%s)"
-    sqlite3 "$INSTALL_DIR/data/jarvis.db" ".backup '$BACKUP'"
+if [ -f "$INSTALL_DIR/data/dobby.db" ]; then
+    BACKUP="$INSTALL_DIR/data/dobby.db.bak.$(date +%s)"
+    sqlite3 "$INSTALL_DIR/data/dobby.db" ".backup '$BACKUP'"
     chmod 600 "$BACKUP"
     green "  Database backed up to $BACKUP"
     # Keep only the 3 most recent backups
-    ls -t "$INSTALL_DIR/data/jarvis.db.bak."* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
+    ls -t "$INSTALL_DIR/data/dobby.db.bak."* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
 fi
 
 # Deploy: rsync first (so files exist if it fails), then clean stale files
@@ -265,10 +285,10 @@ if [ "$OS" = "Darwin" ]; then
     if launchctl print gui/"$ACTUAL_UID"/"$PLIST_LABEL" 2>/dev/null | grep -q "state = running"; then
         COMMIT=$(git rev-parse --short HEAD)
         green ""
-        green "Jarvis upgraded to $COMMIT and running"
+        green "Dobby upgraded to $COMMIT and running"
     else
         red "Service failed to start after upgrade. Check logs:"
-        red "  cat $LOG_DIR/jarvis.error.log"
+        red "  cat $LOG_DIR/dobby.error.log"
         exit 1
     fi
 else
@@ -278,11 +298,11 @@ else
     if systemctl is-active --quiet "$SERVICE_NAME"; then
         COMMIT=$(git rev-parse --short HEAD)
         green ""
-        green "Jarvis upgraded to $COMMIT and running"
+        green "Dobby upgraded to $COMMIT and running"
         green "  Status: $(systemctl is-active $SERVICE_NAME)"
     else
         red "Service failed to start after upgrade. Check logs:"
-        red "  sudo journalctl -u jarvis -n 50"
+        red "  sudo journalctl -u dobby -n 50"
         exit 1
     fi
 fi
@@ -290,4 +310,4 @@ fi
 # --- Re-sync agent cron jobs ---
 echo ""
 echo "Syncing agent cron jobs..."
-DATABASE_PATH="$INSTALL_DIR/data/jarvis.db" bash "$INSTALL_DIR/scripts/install-cron.sh" --run-dir "$INSTALL_DIR"
+DATABASE_PATH="$INSTALL_DIR/data/dobby.db" bash "$INSTALL_DIR/scripts/install-cron.sh" --run-dir "$INSTALL_DIR"
