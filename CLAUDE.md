@@ -14,7 +14,7 @@ bun run tsc --noEmit # Type check
 
 - **Framework**: Next.js 16 App Router, React 19, TypeScript
 - **Styling**: Tailwind CSS v4 (uses `@theme inline` in globals.css, NOT v3 config files)
-- **Database**: SQLite via `better-sqlite3` + `drizzle-orm` (local file at `data/dobby.db`)
+- **Database**: SQLite via `bun:sqlite` + `drizzle-orm` (local file at `data/dobby.db`)
 - **LLM Providers**: Gemini (default: `gemini-3-flash-preview`), OpenAI, Anthropic
 - **Tools**: MCP servers (STDIO transport) + built-in filesystem/time tools
 - **Runtime**: Bun (package manager, script runner, production server)
@@ -111,7 +111,7 @@ src/
       config.ts                       # Loads enabled MCP server configs from DB
       types.ts                        # MCPServerConfig, MCPToolDefinition, MCPToolResult
     db/
-      index.ts                        # SQLite connection (better-sqlite3, WAL mode)
+      index.ts                        # SQLite connection (bun:sqlite, lazy-init, WAL mode)
       schema.ts                       # Drizzle schema (see Database section)
     utils/
       cron.ts                         # cronToHuman() - shared cron expression formatter
@@ -133,7 +133,7 @@ data/
 
 ## Database
 
-SQLite via `better-sqlite3`. Schema defined in `src/lib/db/schema.ts`. DB file at `data/dobby.db` (auto-created).
+SQLite via `bun:sqlite`. Schema defined in `src/lib/db/schema.ts`. DB file at `data/dobby.db` (auto-created).
 
 **Tables**: `conversations`, `messages`, `agent_tasks`, `mcp_servers`, `llm_configs`, `notification_configs`, `projects`, `agents`, `agent_runs`, `claude_sessions`, `claude_session_timeline`, `claude_session_sub_agents`, `claude_session_tasks`
 
@@ -170,7 +170,7 @@ Telegram notifications are configured per-agent via the UI. Config stored in `no
 
 ## Key Design Decisions
 
-- **Bun runtime**: Bun is used as the package manager, script runner, and production server. `better-sqlite3` is kept (instead of `bun:sqlite`) because Next.js build workers run Node.js internally and can't load Bun-only built-in modules.
+- **Bun runtime**: Bun is used as the package manager, script runner, and production server. SQLite uses `bun:sqlite` (built-in, no native addons) via `drizzle-orm/bun-sqlite`. The DB module (`src/lib/db/index.ts`) uses lazy initialization so Next.js build workers (which run Node.js internally) can import it without triggering the `bun:sqlite` load.
 - **Built-in tools are a temporary workaround**: `list_directory`, `read_file`, `write_file`, `get_file_info` in `src/lib/agent/builtin-tools.ts` exist only because `npx` can't download the filesystem MCP server on this network. Once the network issue is resolved (or the MCP server package is pre-installed), remove all built-in tools and replace them with the `@modelcontextprotocol/server-filesystem` MCP server. The only built-in tool that should remain is `get_current_time`.
 - **MCP failure cache**: Failed MCP server connections are cached for 5 minutes to avoid blocking every request with a 120s timeout.
 - **Provider parts preservation**: Gemini 3+ models require "thought signatures" on function call parts. Raw Gemini response parts are stored in `_providerParts` on `LLMMessage` and persisted via `provider_data` JSON column. The Gemini provider replays these verbatim to avoid thought signature errors.

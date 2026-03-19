@@ -106,45 +106,6 @@ BUN_BIN="$(command -v bun)"
 BUN_BIN_DIR="$(dirname "$BUN_BIN")"
 green "  bun $(bun --version) ($BUN_BIN_DIR)"
 
-# --- Check / install Node.js (needed by Next.js build workers) ---
-echo ""
-echo "Checking Node.js..."
-
-if ! command -v node &>/dev/null; then
-    if [ "$OS" = "Darwin" ]; then
-        echo "  Installing Node.js via Homebrew..."
-        sudo -u "$ACTUAL_USER" brew install node
-    elif command -v apt-get &>/dev/null; then
-        echo "  Installing Node.js 22 via NodeSource..."
-        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-        apt-get install -y -qq nodejs > /dev/null
-    elif command -v dnf &>/dev/null; then
-        echo "  Installing Node.js 22 via NodeSource..."
-        curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
-        dnf install -y -q nodejs > /dev/null
-    else
-        red "Error: Node.js is required for Next.js builds but could not be auto-installed"
-        exit 1
-    fi
-    hash -r 2>/dev/null || true
-fi
-
-NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 20 ]; then
-    yellow "  Node.js $(node -v) is too old (need >= 20), upgrading..."
-    if [ "$OS" = "Darwin" ]; then
-        sudo -u "$ACTUAL_USER" brew upgrade node
-    elif command -v apt-get &>/dev/null; then
-        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-        apt-get install -y -qq nodejs > /dev/null
-    elif command -v dnf &>/dev/null; then
-        curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
-        dnf install -y -q nodejs > /dev/null
-    fi
-    hash -r 2>/dev/null || true
-fi
-NODE_BIN_DIR="$(dirname "$(command -v node)")"
-green "  node $(node -v) ($NODE_BIN_DIR)"
 green "  OS: $OS"
 
 # --- Stop existing service to prevent error spam during build ---
@@ -162,13 +123,6 @@ echo ""
 echo "Installing dependencies..."
 cd "$REPO_DIR"
 sudo -u "$ACTUAL_USER" "$BUN_BIN" install --frozen-lockfile
-
-# Rebuild better-sqlite3 native addon against system Node.js
-# (Next.js build workers run Node.js, not Bun)
-echo ""
-echo "Building native addons..."
-NPM_BIN="$(command -v npm)"
-sudo -u "$ACTUAL_USER" "$NPM_BIN" rebuild better-sqlite3
 
 echo ""
 echo "Building for production..."
@@ -218,17 +172,11 @@ else
 fi
 # Copy standalone build but exclude data/ to preserve any existing database
 rsync -a --exclude='/data' "$STANDALONE_DIR/" "$INSTALL_DIR/"
-sed "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
+sed "s|__BUN_BIN_DIR__|$BUN_BIN_DIR|g" "$REPO_DIR/scripts/run.sh" > "$INSTALL_DIR/run.sh"
 chmod +x "$INSTALL_DIR/run.sh"
 
 # Create data directory for SQLite database
 mkdir -p "$INSTALL_DIR/data"
-
-# Copy better-sqlite3 native addon (not included in standalone bundle)
-if [ -d "$REPO_DIR/node_modules/better-sqlite3" ]; then
-    mkdir -p "$INSTALL_DIR/node_modules/better-sqlite3"
-    rsync -a "$REPO_DIR/node_modules/better-sqlite3/" "$INSTALL_DIR/node_modules/better-sqlite3/"
-fi
 
 # Copy agents directory and runner scripts (for cron-based agent execution)
 # Use rsync to merge into existing dirs (cp -R creates nested duplicates)
@@ -249,11 +197,6 @@ chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$INSTALL_DIR"
 echo ""
 echo "Installing runner dependencies..."
 sudo -u "$ACTUAL_USER" bash -c "cd '$INSTALL_DIR' && '$BUN_BIN' install --frozen-lockfile"
-
-# Rebuild better-sqlite3 for system Node.js (runner scripts use npx tsx, not bun)
-echo ""
-echo "Rebuilding better-sqlite3 for Node $(node --version)..."
-sudo -u "$ACTUAL_USER" bash -c "cd '$INSTALL_DIR' && '$NPM_BIN' rebuild better-sqlite3"
 
 # --- Create environment file ---
 echo ""

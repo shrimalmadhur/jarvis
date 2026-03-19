@@ -375,10 +375,12 @@ export function cleanupOldSessions(): number {
 
   // Delete sessions with lastActivity older than the cutoff.
   // Cascade will handle timeline, sub-agents, and tasks.
+  // bun:sqlite's run() returns { changes: number } at runtime, but
+  // drizzle-orm/bun-sqlite types it as void — cast to access it.
   const result = db
     .delete(claudeSessions)
     .where(lt(claudeSessions.lastActivity, cutoffISO))
     .run();
 
-  return result.changes;
+  return (result as unknown as { changes: number }).changes;
 }
