@@ -21,9 +21,11 @@ import {
   ChevronUp,
   X,
   Check,
-  Send,
-  Bell,
   Clock,
+  Eye,
+  EyeOff,
+  Wand2,
+  Loader2,
 } from "lucide-react";
 
 // --- Preset MCP Servers ---
@@ -181,25 +183,18 @@ export default function SettingsPage() {
   const [sessionRetentionSaving, setSessionRetentionSaving] = useState(false);
   const [sessionRetentionSaved, setSessionRetentionSaved] = useState(false);
 
-  // Telegram notification state
-  const [telegramConfig, setTelegramConfig] = useState({
-    botToken: "",
-    chatId: "",
-    enabled: false,
-    configured: false,
-    source: "none" as "none" | "env" | "db",
-  });
-  const [telegramSaving, setTelegramSaving] = useState(false);
-  const [telegramTesting, setTelegramTesting] = useState(false);
-  const [telegramTestResult, setTelegramTestResult] = useState<{
-    success: boolean;
-    error?: string;
-  } | null>(null);
+  // Wand Core (env file) state
+  const [envKeys, setEnvKeys] = useState<Record<string, { set: boolean }>>({});
+  const [envExists, setEnvExists] = useState(false);
+  const [envEditing, setEnvEditing] = useState<Record<string, string>>({});
+  const [envSaving, setEnvSaving] = useState(false);
+  const [envSaved, setEnvSaved] = useState(false);
+  const [envVisible, setEnvVisible] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchServers();
-    fetchTelegramConfig();
     fetchAppSettings();
+    fetchEnvKeys();
   }, []);
 
   const fetchServers = async () => {
@@ -213,22 +208,43 @@ export default function SettingsPage() {
     }
   };
 
-  const fetchTelegramConfig = async () => {
+  const fetchEnvKeys = async () => {
     try {
-      const res = await fetch("/api/notifications/telegram");
+      const res = await fetch("/api/settings/env");
       if (res.ok) {
         const data = await res.json();
-        setTelegramConfig({
-          botToken: data.botToken || "",
-          chatId: data.chatId || "",
-          enabled: data.enabled,
-          configured: data.configured,
-          source: data.source,
-        });
+        setEnvExists(data.exists);
+        setEnvKeys(data.keys || {});
       }
     } catch (error) {
-      console.error("Error fetching Telegram config:", error);
+      console.error("Error fetching env keys:", error);
     }
+  };
+
+  const saveEnvKeys = async () => {
+    // Only send keys where the user actually typed a value
+    const dirty = Object.fromEntries(
+      Object.entries(envEditing).filter(([, v]) => v.length > 0)
+    );
+    if (Object.keys(dirty).length === 0) return;
+    setEnvSaving(true);
+    setEnvSaved(false);
+    try {
+      const res = await fetch("/api/settings/env", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dirty),
+      });
+      if (res.ok) {
+        setEnvSaved(true);
+        setEnvEditing({});
+        fetchEnvKeys();
+        setTimeout(() => setEnvSaved(false), 3000);
+      }
+    } catch (error) {
+      console.error("Error saving env keys:", error);
+    }
+    setEnvSaving(false);
   };
 
   const fetchAppSettings = async () => {
@@ -264,63 +280,6 @@ export default function SettingsPage() {
       console.error("Error saving session retention:", error);
     }
     setSessionRetentionSaving(false);
-  };
-
-  const saveTelegramConfig = async () => {
-    setTelegramSaving(true);
-    try {
-      const res = await fetch("/api/notifications/telegram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          botToken: telegramConfig.botToken,
-          chatId: telegramConfig.chatId,
-          enabled: true,
-        }),
-      });
-      if (res.ok) {
-        fetchTelegramConfig();
-      }
-    } catch (error) {
-      console.error("Error saving Telegram config:", error);
-    }
-    setTelegramSaving(false);
-  };
-
-  const testTelegram = async () => {
-    setTelegramTesting(true);
-    setTelegramTestResult(null);
-    try {
-      const res = await fetch("/api/notifications/telegram/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          botToken: telegramConfig.botToken,
-          chatId: telegramConfig.chatId,
-        }),
-      });
-      const result = await res.json();
-      setTelegramTestResult(result);
-    } catch {
-      setTelegramTestResult({ success: false, error: "Network error" });
-    }
-    setTelegramTesting(false);
-  };
-
-  const removeTelegramConfig = async () => {
-    try {
-      await fetch("/api/notifications/telegram", { method: "DELETE" });
-      setTelegramConfig({
-        botToken: "",
-        chatId: "",
-        enabled: false,
-        configured: false,
-        source: process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN ? "env" : "none",
-      });
-      setTelegramTestResult(null);
-    } catch (error) {
-      console.error("Error removing Telegram config:", error);
-    }
   };
 
   const addFromPreset = async (preset: MCPPreset) => {
@@ -650,102 +609,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Telegram Notifications */}
-        <Card className="animate-fade-in">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-4 w-4" />
-              Owl Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Send className="h-4.5 w-4.5 text-muted-foreground" />
-              <div>
-                <span className="text-sm font-medium text-foreground">Telegram Owl</span>
-                <p className="text-[12px] text-muted">
-                  Dispatch an owl when conversations complete
-                </p>
-              </div>
-            </div>
-
-            {telegramConfig.source === "env" && !telegramConfig.configured && (
-              <div className="rounded-lg bg-surface-raised px-3 py-2 text-xs text-muted-foreground">
-                Using environment variables. Add config below to override.
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Bot Token
-                </label>
-                <input
-                  type="password"
-                  placeholder="123456:ABC-DEF..."
-                  value={telegramConfig.botToken}
-                  onChange={(e) =>
-                    setTelegramConfig({ ...telegramConfig, botToken: e.target.value })
-                  }
-                  className={inputClasses}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Chat ID
-                </label>
-                <input
-                  type="text"
-                  placeholder="-1001234567890"
-                  value={telegramConfig.chatId}
-                  onChange={(e) =>
-                    setTelegramConfig({ ...telegramConfig, chatId: e.target.value })
-                  }
-                  className={inputClasses}
-                />
-              </div>
-
-              {telegramTestResult && (
-                <div
-                  className={`rounded-lg px-3 py-2 text-xs ${
-                    telegramTestResult.success
-                      ? "bg-green/10 text-green"
-                      : "bg-red/10 text-red"
-                  }`}
-                >
-                  {telegramTestResult.success
-                    ? "Test message sent successfully"
-                    : `Error: ${telegramTestResult.error}`}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="accent"
-                  onClick={saveTelegramConfig}
-                  disabled={!telegramConfig.botToken || !telegramConfig.chatId || telegramSaving}
-                >
-                  {telegramSaving ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={testTelegram}
-                  disabled={!telegramConfig.botToken || !telegramConfig.chatId || telegramTesting}
-                >
-                  {telegramTesting ? "Testing..." : "Test"}
-                </Button>
-                {telegramConfig.configured && (
-                  <Button size="sm" variant="ghost" onClick={removeTelegramConfig}>
-                    Remove
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Session Retention */}
         <Card className="animate-fade-in">
           <CardHeader>
@@ -826,37 +689,120 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* LLM Config info */}
+        {/* Wand Core Selection - live env editor */}
         <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle>Wand Core Selection</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Wand2 className="h-4 w-4" />
+              Wand Core Selection
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Choose your wand core by adding API keys to your{" "}
-              <code className="rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[12px] text-accent">
-                .env.local
-              </code>{" "}
-              file:
-            </p>
-            <div className="mt-3 space-y-1 rounded-lg bg-background p-3.5 font-mono text-[13px] text-muted-foreground">
-              <div>
-                <span className="text-accent">GEMINI_API_KEY</span>
-                <span className="text-muted">=your-key-here</span>
+          <CardContent className="space-y-4">
+            {!envExists ? (
+              <div className="rounded-lg bg-surface-raised px-3 py-2 text-xs text-muted-foreground">
+                Env file not found at <code className="text-accent">/etc/dobby/env</code>.
+                Run <code className="text-accent">make install</code> to set up Dobby as a service.
               </div>
-              <div>
-                <span className="text-accent">OPENAI_API_KEY</span>
-                <span className="text-muted">=your-key-here</span>
-              </div>
-              <div>
-                <span className="text-accent">ANTHROPIC_API_KEY</span>
-                <span className="text-muted">=your-key-here</span>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-muted">
-              Dobby&apos;s default wand core is Gemini. The wand chooses the wizard,
-              but you can override it in the llm_configs table.
-            </p>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Manage your wand cores from the enchanted scroll at{" "}
+                  <code className="rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[12px] text-accent">
+                    /etc/dobby/env
+                  </code>
+                </p>
+                <div className="space-y-3">
+                  {[
+                    { key: "GEMINI_API_KEY", label: "Gemini (default wand core)" },
+                    { key: "OPENAI_API_KEY", label: "OpenAI" },
+                    { key: "ANTHROPIC_API_KEY", label: "Anthropic" },
+                  ].map(({ key, label }) => {
+                    const info = envKeys[key];
+                    const isEditing = key in envEditing;
+                    const isVisible = envVisible[key] || false;
+
+                    return (
+                      <div key={key} className="rounded-lg border border-border px-4 py-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-foreground">{label}</span>
+                          <span className={`text-[12px] font-mono ${info?.set ? "text-green" : "text-muted"}`}>
+                            {info?.set ? "configured" : "not set"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 relative">
+                            <input
+                              type={isVisible ? "text" : "password"}
+                              placeholder={info?.set ? "********" : "not configured"}
+                              value={isEditing ? envEditing[key] : ""}
+                              onChange={(e) =>
+                                setEnvEditing({ ...envEditing, [key]: e.target.value })
+                              }
+                              className={inputClasses}
+                            />
+                          </div>
+                          <button
+                            onClick={() => setEnvVisible({ ...envVisible, [key]: !isVisible })}
+                            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                            title={isVisible ? "Hide" : "Show"}
+                          >
+                            {isVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          {isEditing && (
+                            <button
+                              onClick={() => {
+                                const next = { ...envEditing };
+                                delete next[key];
+                                setEnvEditing(next);
+                              }}
+                              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                              title="Cancel"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {Object.values(envEditing).some(v => v.length > 0) && (
+                  <div className="flex items-center gap-3">
+                    <Button
+                      size="sm"
+                      variant="accent"
+                      onClick={saveEnvKeys}
+                      disabled={envSaving}
+                    >
+                      {envSaving ? (
+                        <span className="flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Saving...
+                        </span>
+                      ) : "Save Changes"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEnvEditing({})}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+
+                {envSaved && (
+                  <div className="rounded-lg bg-green/10 px-3 py-2 text-xs text-green">
+                    Enchantment saved. Restart Dobby to apply changes.
+                  </div>
+                )}
+
+                <p className="text-xs text-muted">
+                  Dobby&apos;s default wand core is Gemini. Changes require a restart to take effect.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
