@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { ChatMessage } from "./chat-message";
-import { Sparkles } from "lucide-react";
+import { Wand2 } from "lucide-react";
 
 interface Message {
   id?: string;
@@ -35,13 +35,13 @@ export function ChatMessagesList({
       <div className="flex flex-1 items-center justify-center">
         <div className="animate-fade-in text-center">
           <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 border border-accent/10">
-            <Sparkles className="h-7 w-7 text-accent" />
+            <Wand2 className="h-7 w-7 text-accent" />
           </div>
           <h2 className="text-xl font-semibold text-foreground">
-            What can I help you with?
+            Dobby is ready to serve!
           </h2>
           <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
-            Ask me anything, or connect MCP servers in Settings to extend my capabilities.
+            Send Dobby an owl, and Dobby shall help. Visit the Room of Requirement to grant Dobby new magical powers.
           </p>
         </div>
       </div>
@@ -62,7 +62,7 @@ export function ChatMessagesList({
         {isLoading && (
           <div className="flex gap-4">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-raised border border-border text-muted-foreground">
-              <Sparkles className="h-4 w-4" />
+              <Wand2 className="h-4 w-4" />
             </div>
             <div className="rounded-2xl rounded-tl-lg bg-assistant-bubble border border-border/50 px-5 py-4">
               <div className="flex items-center gap-1.5">

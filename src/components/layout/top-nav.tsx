@@ -11,14 +11,15 @@ import {
   Terminal,
   Sun,
   Moon,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/sessions", label: "Sessions", icon: Terminal },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/chat", label: "Owl Post", icon: MessageSquare },
+  { href: "/projects", label: "Houses", icon: FolderKanban },
+  { href: "/sessions", label: "Pensieve", icon: Terminal },
+  { href: "/settings", label: "Room of Requirement", icon: Settings },
 ];
 
 interface TopNavProps {
@@ -56,7 +57,7 @@ export function TopNav({ onNewChat }: TopNavProps) {
       {/* Brand */}
       <Link href="/chat" className="flex items-center gap-3 mr-8">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent shadow-sm shadow-accent/20">
-          <span className="text-[13px] font-bold text-accent-foreground">D</span>
+          <Wand2 className="h-4 w-4 text-accent-foreground" />
         </div>
         <span className="text-[17px] font-semibold tracking-tight text-foreground">
           Dobby
@@ -98,14 +99,14 @@ export function TopNav({ onNewChat }: TopNavProps) {
       {/* Status */}
       <div className="flex items-center gap-2.5 mr-5">
         <span className="h-2 w-2 rounded-full bg-green status-dot-live" />
-        <span className="text-[13px] text-muted-foreground">Online</span>
+        <span className="text-[13px] text-muted-foreground">Enchanted</span>
       </div>
 
       {/* Theme toggle */}
       <button
         onClick={toggleTheme}
         className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-all hover:text-foreground hover:bg-surface-hover hover:border-border-hover mr-3"
-        title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        title={`Switch to ${theme === "dark" ? "light" : "dark"} mode — ${theme === "dark" ? "Lumos!" : "Nox!"}`}
       >
         {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
@@ -115,10 +116,10 @@ export function TopNav({ onNewChat }: TopNavProps) {
         <button
           onClick={onNewChat}
           className="flex h-8 items-center gap-2 rounded-lg bg-accent px-4 text-[14px] font-medium text-accent-foreground transition-all hover:bg-accent-dim shadow-sm shadow-accent/20"
-          title="New chat"
+          title="Send a new owl"
         >
           <Plus className="h-4 w-4" />
-          New Chat
+          New Owl
         </button>
       )}
     </nav>

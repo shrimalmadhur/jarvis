@@ -1,53 +1,57 @@
 @import "tailwindcss";
 
-/* ── DARK THEME (default) ────────────────────────────────────── */
+/* ── DARK THEME (default) ── Hogwarts at Night ───────────────── */
 :root {
-  --background: #0d1117;
-  --foreground: #e6edf3;
-  --surface: #161b22;
-  --surface-hover: #1f252d;
-  --surface-raised: #1c2128;
-  --border: #30363d;
-  --border-hover: #484f58;
-  --muted: #7d8590;
-  --muted-foreground: #8b949e;
-  --accent: #7c3aed;
-  --accent-dim: #6d28d9;
-  --accent-glow: rgba(124, 58, 237, 0.15);
-  --accent-blue: #58a6ff;
-  --accent-foreground: #ffffff;
-  --user-bubble: #7c3aed;
-  --user-bubble-text: #ffffff;
-  --assistant-bubble: #161b22;
-  --assistant-bubble-text: #c9d1d9;
-  --green: #3fb950;
-  --red: #f85149;
+  --background: #0f0d13;
+  --foreground: #e8dfd0;
+  --surface: #1a1520;
+  --surface-hover: #251e2c;
+  --surface-raised: #1f1826;
+  --border: #3a2f44;
+  --border-hover: #56485e;
+  --muted: #8a7d91;
+  --muted-foreground: #9e9096;
+  --accent: #d4a520;
+  --accent-dim: #b8911c;
+  --accent-glow: rgba(212, 165, 32, 0.15);
+  --accent-blue: #7eb8e0;
+  --accent-foreground: #1a1520;
+  --user-bubble: #7a1a2e;
+  --user-bubble-text: #f0dcc0;
+  --assistant-bubble: #1a1520;
+  --assistant-bubble-text: #d4c8b8;
+  --green: #2d8a4e;
+  --red: #c0392b;
+  --maroon: #7a1a2e;
+  --parchment: #f0dcc0;
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', monospace;
 }
 
-/* ── LIGHT THEME ─────────────────────────────────────────────── */
+/* ── LIGHT THEME ── The Great Hall in Daylight ───────────────── */
 .light {
-  --background: #ffffff;
-  --foreground: #1f2328;
-  --surface: #f6f8fa;
-  --surface-hover: #eef1f4;
-  --surface-raised: #f0f3f6;
-  --border: #d1d9e0;
-  --border-hover: #b4bdc6;
-  --muted: #656d76;
-  --muted-foreground: #636c76;
-  --accent: #7c3aed;
-  --accent-dim: #6d28d9;
-  --accent-glow: rgba(124, 58, 237, 0.1);
-  --accent-blue: #0969da;
-  --accent-foreground: #ffffff;
-  --user-bubble: #7c3aed;
-  --user-bubble-text: #ffffff;
-  --assistant-bubble: #f6f8fa;
-  --assistant-bubble-text: #1f2328;
-  --green: #1a7f37;
-  --red: #d1242f;
+  --background: #f5eed8;
+  --foreground: #2c1810;
+  --surface: #efe5cc;
+  --surface-hover: #e8dbb8;
+  --surface-raised: #ece2c8;
+  --border: #c4b698;
+  --border-hover: #a89878;
+  --muted: #7a6b55;
+  --muted-foreground: #6b5c48;
+  --accent: #b8860b;
+  --accent-dim: #9a7209;
+  --accent-glow: rgba(184, 134, 11, 0.12);
+  --accent-blue: #3a6b94;
+  --accent-foreground: #2c1810;
+  --user-bubble: #7a1a2e;
+  --user-bubble-text: #f0dcc0;
+  --assistant-bubble: #efe5cc;
+  --assistant-bubble-text: #2c1810;
+  --green: #2d6a3e;
+  --red: #a03020;
+  --maroon: #7a1a2e;
+  --parchment: #f0dcc0;
 }
 
 @theme inline {
@@ -71,6 +75,8 @@
   --color-assistant-bubble-text: var(--assistant-bubble-text);
   --color-green: var(--green);
   --color-red: var(--red);
+  --color-maroon: var(--maroon);
+  --color-parchment: var(--parchment);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 }
@@ -165,7 +171,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(124, 58, 237, 0.03) 40%, rgba(124, 58, 237, 0.06) 50%, rgba(124, 58, 237, 0.03) 60%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(212, 165, 32, 0.03) 40%, rgba(212, 165, 32, 0.06) 50%, rgba(212, 165, 32, 0.03) 60%, transparent 100%);
   animation: shimmer-sweep 4s ease-in-out infinite;
   pointer-events: none;
 }
@@ -209,14 +215,14 @@ body {
 
 .grid-pattern {
   background-image:
-    linear-gradient(rgba(124, 58, 237, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(124, 58, 237, 0.02) 1px, transparent 1px);
+    linear-gradient(rgba(212, 165, 32, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 165, 32, 0.02) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 .light .grid-pattern {
   background-image:
-    linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(212, 165, 32, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 165, 32, 0.03) 1px, transparent 1px);
 }
 
 .input-focus { transition: border-color 150ms ease, box-shadow 150ms ease; }
@@ -226,7 +232,7 @@ body {
 }
 
 ::selection {
-  background: rgba(124, 58, 237, 0.25);
+  background: rgba(212, 165, 32, 0.25);
   color: var(--foreground);
 }
 

@@ -43,12 +43,12 @@ export default function ChatLayout({
       <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-surface">
         <div className="flex items-center justify-between px-3 py-3">
           <span className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Conversations
+            Owl Post
           </span>
           <Link
             href="/chat"
             className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-            title="New chat"
+            title="New owl"
           >
             <Plus className="h-3.5 w-3.5" />
           </Link>
@@ -56,7 +56,7 @@ export default function ChatLayout({
         <div className="flex-1 overflow-y-auto px-2 py-1">
           {conversations.length === 0 ? (
             <p className="px-3 py-6 text-center text-xs text-muted">
-              No conversations yet
+              No owls yet
             </p>
           ) : (
             <div className="space-y-px">

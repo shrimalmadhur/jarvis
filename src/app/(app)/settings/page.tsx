@@ -414,9 +414,9 @@ export default function SettingsPage() {
     <div className="flex-1 overflow-y-auto px-8 lg:px-16 py-8">
       <div className="space-y-8">
         <div className="animate-fade-in">
-          <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+          <h1 className="text-xl font-semibold text-foreground">Room of Requirement</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure MCP servers and LLM preferences
+            Configure Dobby&apos;s magical connections and enchantments
           </p>
         </div>
 
@@ -424,7 +424,7 @@ export default function SettingsPage() {
         {servers.length > 0 && (
           <Card className="animate-fade-in">
             <CardHeader>
-              <CardTitle>Active Servers</CardTitle>
+              <CardTitle>Active Enchantments</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {servers.map((server) => (
@@ -476,7 +476,7 @@ export default function SettingsPage() {
         {/* Preset Library */}
         <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle>Add Server</CardTitle>
+            <CardTitle>Enchantment Library</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-2.5">
@@ -586,7 +586,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Terminal className="h-4 w-4" />
-                <span>Custom server</span>
+                <span>Custom enchantment</span>
                 {showCustom ? (
                   <ChevronUp className="h-3 w-3" />
                 ) : (
@@ -655,16 +655,16 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
-              Notifications
+              Owl Notifications
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
               <Send className="h-4.5 w-4.5 text-muted-foreground" />
               <div>
-                <span className="text-sm font-medium text-foreground">Telegram</span>
+                <span className="text-sm font-medium text-foreground">Telegram Owl</span>
                 <p className="text-[12px] text-muted">
-                  Send a summary when conversations complete
+                  Dispatch an owl when conversations complete
                 </p>
               </div>
             </div>
@@ -751,13 +751,13 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Session Retention
+              Pensieve Retention
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Automatically delete sessions older than the specified number of days.
-              Leave empty to keep sessions forever.
+              Memories older than the specified days will fade from the Pensieve.
+              Leave empty to preserve all memories forever.
             </p>
             <div>
               <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -814,12 +814,12 @@ export default function SettingsPage() {
               </div>
               {sessionRetentionSaved && (
                 <p className="mt-2 text-xs text-green">
-                  Session retention setting saved
+                  Pensieve retention enchantment saved
                 </p>
               )}
               {sessionRetentionDays && (
                 <p className="mt-2 text-xs text-muted">
-                  Sessions older than {sessionRetentionDays} day{sessionRetentionDays !== "1" ? "s" : ""} will be automatically removed
+                  Memories older than {sessionRetentionDays} day{sessionRetentionDays !== "1" ? "s" : ""} will fade from the Pensieve
                 </p>
               )}
             </div>
@@ -829,11 +829,11 @@ export default function SettingsPage() {
         {/* LLM Config info */}
         <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle>LLM Configuration</CardTitle>
+            <CardTitle>Wand Core Selection</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Set your preferred LLM by adding API keys to your{" "}
+              Choose your wand core by adding API keys to your{" "}
               <code className="rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[12px] text-accent">
                 .env.local
               </code>{" "}
@@ -854,8 +854,8 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="mt-3 text-xs text-muted">
-              Dobby defaults to Gemini. Configure the default provider in the
-              database&apos;s llm_configs table.
+              Dobby&apos;s default wand core is Gemini. The wand chooses the wizard,
+              but you can override it in the llm_configs table.
             </p>
           </CardContent>
         </Card>

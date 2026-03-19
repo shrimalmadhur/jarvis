@@ -43,14 +43,14 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const hasContent = value.trim().length > 0;
 
   return (
-    <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-surface px-5 py-4 transition-all duration-200 focus-within:border-accent/40 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.08)]">
+    <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-surface px-5 py-4 transition-all duration-200 focus-within:border-accent/40 focus-within:shadow-[0_0_0_3px_rgba(212,165,32,0.08)]">
       <textarea
         ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onInput={handleInput}
-        placeholder="Message Dobby..."
+        placeholder="Send an owl to Dobby..."
         disabled={disabled}
         rows={1}
         className="flex-1 resize-none bg-transparent text-[16px] leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-40"
