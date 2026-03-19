@@ -448,7 +448,7 @@ function TelegramSection({ agentId }: { agentId: string }) {
           <label className="block text-[14px] text-muted">Bot Token</label>
           <input type="password" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder="123456:ABC-DEFGhijklmnop..." className={inputClasses} disabled={phase === "validating"} />
           <p className="text-[13px] text-muted">Create a bot via <span className="font-medium text-muted-foreground">@BotFather</span> on Telegram, then paste the token here.</p>
-          <button onClick={handleValidate} disabled={!botToken.trim() || phase === "validating"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">
+          <button onClick={handleValidate} disabled={!botToken.trim() || phase === "validating"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-50">
             {phase === "validating" ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Validating...</span> : "Connect"}
           </button>
         </div>
@@ -469,7 +469,7 @@ function TelegramSection({ agentId }: { agentId: string }) {
           <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2"><p className="text-[13px] text-yellow-600 dark:text-yellow-400">Could not auto-detect chat ID. Enter it manually below.</p></div>
           <div className="space-y-2"><label className="block text-[14px] text-muted">Chat ID</label><input type="text" value={manualChatId} onChange={(e) => setManualChatId(e.target.value)} placeholder="-100123456789" className={inputClasses} /></div>
           <div className="flex gap-2">
-            <button onClick={() => handleSave(manualChatId)} disabled={!manualChatId.trim()} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">Save</button>
+            <button onClick={() => handleSave(manualChatId)} disabled={!manualChatId.trim()} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-50">Save</button>
             <button onClick={() => { setPhase("idle"); setBotInfo(null); setManualChatId(""); }} className="text-[13px] text-muted hover:text-muted-foreground transition-colors">Cancel</button>
           </div>
         </div>
@@ -481,7 +481,7 @@ function TelegramSection({ agentId }: { agentId: string }) {
             <div className="flex items-center justify-between"><span className="text-muted">Bot</span><span className="font-mono text-muted-foreground">@{botInfo?.botUsername || botInfo?.botName}</span></div>
             <div className="flex items-center justify-between"><span className="text-muted">Chat ID</span><span className="font-mono text-muted-foreground">{chatId}</span></div>
           </div>
-          <button onClick={() => handleSave()} disabled={phase === "saving"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-accent-dim disabled:opacity-50">
+          <button onClick={() => handleSave()} disabled={phase === "saving"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-50">
             {phase === "saving" ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Saving...</span> : "Save & Test"}
           </button>
         </div>
@@ -637,7 +637,7 @@ export default function AgentDetailPage() {
         </div>
         <p className="text-[17px] text-muted-foreground">{error || "Agent not found"}</p>
         <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-[15px] text-accent transition-colors hover:text-accent-dim">
-          <ArrowLeft className="h-3 w-3" />Back to Project
+          <ArrowLeft className="h-3 w-3" />Back to House
         </Link>
       </div>
     );
@@ -661,7 +661,7 @@ export default function AgentDetailPage() {
                   <Bot className="h-5.5 w-5.5 text-accent" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Edit Agent</h1>
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Enchant House-Elf</h1>
                   <p className="text-[16px] text-muted-foreground">{agent.name}</p>
                 </div>
               </div>
@@ -700,7 +700,7 @@ export default function AgentDetailPage() {
               className="inline-flex items-center gap-1.5 text-[15px] text-muted-foreground transition-colors hover:text-foreground group mb-5"
             >
               <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-              Back to Project
+              Back to House
             </Link>
 
             <div className="space-y-3">
@@ -717,7 +717,7 @@ export default function AgentDetailPage() {
                     agent.enabled ? "border-green/20 bg-green/8 text-green" : "border-border bg-surface-raised text-muted"
                   )}>
                     <span className={cn("h-1.5 w-1.5 rounded-full", agent.enabled ? "bg-green status-dot-live" : "bg-muted")} />
-                    {agent.enabled ? "Active" : "Paused"}
+                    {agent.enabled ? "Enchanted" : "Dormant"}
                   </span>
                   <button
                     onClick={handleRunNow}
@@ -730,7 +730,7 @@ export default function AgentDetailPage() {
                     ) : (
                       <Play className="h-3.5 w-3.5" />
                     )}
-                    {running ? "Running..." : "Run Now"}
+                    {running ? "Casting..." : "Cast Spell"}
                   </button>
                   <button onClick={() => setEditMode(true)} className="rounded-xl border border-border p-2.5 text-muted-foreground transition-colors hover:text-foreground hover:border-border-hover" title="Edit">
                     <Pencil className="h-4 w-4" />

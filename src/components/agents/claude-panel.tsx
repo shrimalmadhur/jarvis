@@ -353,7 +353,7 @@ export function ClaudePanel({
     return (
       <button
         onClick={() => setCollapsed(false)}
-        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full bg-accent shadow-lg shadow-accent/20 text-white transition-transform hover:scale-105"
+        className="fixed bottom-6 right-6 flex h-10 w-10 items-center justify-center rounded-full bg-accent shadow-lg shadow-accent/20 text-accent-foreground transition-transform hover:scale-105"
         title="Open Claude assistant"
       >
         <Sparkles className="h-4.5 w-4.5" />
@@ -459,7 +459,7 @@ export function ClaudePanel({
             <button
               type="submit"
               disabled={!input.trim()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white transition-colors hover:bg-accent-dim disabled:opacity-30"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-30"
               title="Send (Enter)"
             >
               <CornerDownLeft className="h-3.5 w-3.5" />

@@ -60,7 +60,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
           {/* Footer */}
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             <span className="text-[12px] font-mono text-muted uppercase tracking-wider">
-              {project.agentCount} {project.agentCount === 1 ? "agent" : "agents"} registered
+              {project.agentCount} {project.agentCount === 1 ? "house-elf" : "house-elves"} bound
             </span>
             <span className="flex items-center gap-1 text-[13px] text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
               open <ArrowRight className="h-3 w-3" />
@@ -136,19 +136,19 @@ export default function ProjectsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-accent text-[14px] glow-text">&gt;&gt;</span>
                 <h1 className="text-[24px] font-bold tracking-widest text-foreground uppercase glow-text">
-                  Projects
+                  Hogwarts Houses
                 </h1>
               </div>
               <p className="text-[14px] text-muted-foreground font-mono ml-6">
-                // autonomous agent workspaces
+                // where your enchanted servants dwell
               </p>
             </div>
             <button
               onClick={() => setShowCreate(!showCreate)}
-              className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[14px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(124,58,237,0.15)]"
+              className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[14px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(212,165,32,0.15)]"
             >
               <Plus className="h-3.5 w-3.5" />
-              init new
+              found house
             </button>
           </div>
         </div>
@@ -163,7 +163,7 @@ export default function ProjectsPage() {
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[13px] font-mono font-bold text-accent uppercase tracking-widest">
-                &gt; init project
+                &gt; found new house
               </span>
               <button type="button" onClick={() => setShowCreate(false)} className="text-muted hover:text-foreground transition-colors">
                 <X className="h-3.5 w-3.5" />
@@ -229,9 +229,9 @@ export default function ProjectsPage() {
         {!loading && !error && projects.length === 0 && !showCreate && (
           <div className="animate-fade-in flex flex-col items-center justify-center py-24 text-center">
             <div className="text-[14px] font-mono text-muted-foreground space-y-1">
-              <p className="text-muted">$ dobby --list-projects</p>
-              <p className="text-muted-foreground">0 projects found</p>
-              <p className="text-muted mt-4">run <span className="text-accent">&quot;init new&quot;</span> to create your first project</p>
+              <p className="text-muted">The Sorting Hat sees no houses yet...</p>
+              <p className="text-muted-foreground">0 houses founded</p>
+              <p className="text-muted mt-4">cast <span className="text-accent">&quot;found house&quot;</span> to establish your first one</p>
             </div>
           </div>
         )}
@@ -240,7 +240,7 @@ export default function ProjectsPage() {
         {projects.length > 0 && (
           <>
             <div className="text-[12px] font-mono text-muted uppercase tracking-wider">
-              {projects.length} project{projects.length !== 1 ? "s" : ""} found
+              {projects.length} {projects.length !== 1 ? "houses" : "house"} founded
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {projects.map((project, idx) => (

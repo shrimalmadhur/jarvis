@@ -91,11 +91,11 @@ export default function NewAgentPage() {
               <div className="flex items-center gap-2">
                 <span className="text-accent text-[16px] glow-text">&gt;&gt;</span>
                 <h1 className="text-[24px] font-bold tracking-widest text-foreground uppercase glow-text">
-                  Spawn Agent
+                  Summon House-Elf
                 </h1>
               </div>
               <p className="text-[14px] font-mono text-muted-foreground mt-1 ml-7">
-                // configure a new autonomous agent in {projectName}
+                // bind a new enchanted servant to {projectName}
               </p>
             </div>
           </div>
@@ -104,7 +104,7 @@ export default function NewAgentPage() {
 
       <div className="px-8 lg:px-16 py-8">
         <div className="border border-border bg-surface p-6">
-          <AgentForm onSubmit={handleSubmit} submitLabel="deploy" />
+          <AgentForm onSubmit={handleSubmit} submitLabel="bind" />
         </div>
       </div>
     </div>

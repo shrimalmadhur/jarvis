@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Bot, User } from "lucide-react";
+import { Wand2, User } from "lucide-react";
 
 interface ChatMessageProps {
   role: "user" | "assistant" | "tool";
@@ -28,7 +28,7 @@ export function ChatMessage({ role, content, model }: ChatMessageProps) {
             : "bg-surface-raised border border-border text-muted-foreground"
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+        {isUser ? <User className="h-4 w-4" /> : <Wand2 className="h-4 w-4" />}
       </div>
 
       {/* Bubble */}
