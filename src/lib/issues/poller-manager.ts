@@ -72,6 +72,17 @@ export async function clearStaleLocks() {
   }
 }
 
+/** Clear ALL locks unconditionally. Called on poller startup since no pipeline
+ *  from a previous process can still be running after a restart. */
+export async function clearAllLocks() {
+  const cleared = await db.update(issues).set({ lockedBy: null, lockedAt: null })
+    .where(isNotNull(issues.lockedBy))
+    .returning({ id: issues.id });
+  if (cleared.length > 0) {
+    console.log(`[issue-poller] Startup: cleared ${cleared.length} orphaned lock(s) from previous process`);
+  }
+}
+
 export async function startPendingPipelines(config: IssuesTelegramConfig) {
   // Check how many pipelines are currently running
   const [{ activeCount }] = await db.select({ activeCount: sql<number>`count(*)` })
@@ -101,7 +112,7 @@ export async function startPendingPipelines(config: IssuesTelegramConfig) {
       .catch(err => console.error(`[issue-poller] Pipeline failed for ${issue.id}:`, err))
       .finally(async () => {
         await db.update(issues).set({ lockedBy: null, lockedAt: null })
-          .where(eq(issues.id, issue.id));
+          .where(and(eq(issues.id, issue.id), eq(issues.lockedBy, lockId)));
       });
   }
 }
@@ -134,7 +145,7 @@ export async function startResumedPipelines(config: IssuesTelegramConfig) {
       .catch(err => console.error(`[issue-poller] Pipeline failed for ${issue.id}:`, err))
       .finally(async () => {
         await db.update(issues).set({ lockedBy: null, lockedAt: null })
-          .where(eq(issues.id, issue.id));
+          .where(and(eq(issues.id, issue.id), eq(issues.lockedBy, lockId)));
       });
   }
 }
@@ -171,6 +182,10 @@ async function runPoller() {
   g._issuePoller!.running = true;
   g._issuePoller!.starting = false;
   console.log("[issue-poller] Telegram config found, polling started");
+
+  // On fresh start, clear all locks — any locked pipelines from a previous
+  // process are dead and won't release their locks on their own.
+  await clearAllLocks();
 
   let offset = await getOffset();
 

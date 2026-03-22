@@ -11,7 +11,7 @@ if (fs.existsSync(".env.local")) {
 }
 
 import { getIssuesTelegramConfig } from "../src/lib/issues/telegram-poller";
-import { getOffset, runPollerIteration } from "../src/lib/issues/poller-manager";
+import { getOffset, runPollerIteration, clearAllLocks } from "../src/lib/issues/poller-manager";
 
 async function main() {
   console.log("Dobby Issue Poller started (standalone)");
@@ -28,6 +28,9 @@ async function main() {
     }
     console.log("Telegram config found. Starting poller...");
   }
+
+  // Clear all locks on startup — no pipeline from a previous process can still be running
+  await clearAllLocks();
 
   let offset = await getOffset();
   console.log(`Resuming from offset: ${offset}`);
