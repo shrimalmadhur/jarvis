@@ -8,7 +8,7 @@ export PATH="__BUN_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 # Source environment variables
 if [ -f /etc/dobby/env ]; then
     set -a
-    source /etc/dobby/env
+    . /etc/dobby/env
     set +a
 fi
 

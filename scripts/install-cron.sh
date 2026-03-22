@@ -94,7 +94,7 @@ while IFS=$'\t' read -r agent_id agent_name schedule; do
   # Source env file before running, so API keys and Telegram tokens are available
   ENV_SOURCE=""
   if [[ -f "$ENV_FILE" ]]; then
-    ENV_SOURCE="set -a && source '$ENV_FILE' && set +a && "
+    ENV_SOURCE="set -a && . '$ENV_FILE' && set +a && "
   fi
 
   # Use --id instead of name to avoid breakage when agents are renamed.
