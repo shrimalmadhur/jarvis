@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { repositories, issues } from "@/lib/db/schema";
-import { eq, count, and, isNotNull } from "drizzle-orm";
+import { eq, count, and, isNotNull, isNull } from "drizzle-orm";
 import { updateRepositorySchema } from "@/lib/validations/repository";
 
 export async function GET(
@@ -136,6 +136,29 @@ export async function DELETE(
         { error: `Cannot delete: ${activeCount} active pipeline(s) running. Cancel them first.` },
         { status: 409 }
       );
+    }
+
+    // Clean up worktrees for all issues before cascade delete
+    const repoIssues = await db.select({ worktreePath: issues.worktreePath })
+      .from(issues)
+      .where(eq(issues.repositoryId, id));
+
+    const [repo] = await db.select({ localRepoPath: repositories.localRepoPath })
+      .from(repositories).where(eq(repositories.id, id)).limit(1);
+
+    if (repo) {
+      for (const issue of repoIssues) {
+        if (issue.worktreePath) {
+          try {
+            execFileSync("git", ["worktree", "remove", issue.worktreePath, "--force"], {
+              cwd: repo.localRepoPath, stdio: "ignore",
+            });
+          } catch { /* best effort */ }
+        }
+      }
+      try {
+        execFileSync("git", ["worktree", "prune"], { cwd: repo.localRepoPath, stdio: "ignore" });
+      } catch { /* best effort */ }
     }
 
     const deleted = await db

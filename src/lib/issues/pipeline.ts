@@ -72,10 +72,19 @@ async function runClaudePhase(opts: {
     let assistantBlocksSize = 0;
     let timedOut = false;
 
-    const timer = setTimeout(() => { timedOut = true; proc.kill("SIGTERM"); }, timeout);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      proc.kill("SIGTERM");
+      // Force kill if SIGTERM is ignored after 30s
+      setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* already dead */ } }, 30000);
+    }, timeout);
 
     proc.stdout!.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
+      // Cap buffer to prevent OOM from very long lines without newlines
+      if (buffer.length > 1_000_000) {
+        buffer = buffer.slice(-500_000);
+      }
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
@@ -115,10 +124,18 @@ async function runClaudePhase(opts: {
           if (event.type === "result" && event.result) resultText = event.result;
           if (event.type === "assistant" && event.message?.content) {
             for (const block of event.message.content) {
-              if (block.type === "text" && block.text) assistantBlocks.push(block.text);
+              if (block.type === "text" && block.text && assistantBlocksSize < MAX_FALLBACK_CHARS) {
+                assistantBlocks.push(block.text);
+                assistantBlocksSize += block.text.length;
+              }
             }
           }
         } catch { /* ignore */ }
+      }
+
+      // Cap resultText to prevent unbounded DB writes
+      if (resultText.length > MAX_FALLBACK_CHARS) {
+        resultText = resultText.substring(0, MAX_FALLBACK_CHARS);
       }
 
       let output = resultText.trim() || assistantBlocks.join("\n\n");
@@ -694,6 +711,14 @@ export async function runIssuePipeline(
         `Issue completed: <b>${escapeHtml(issue.title)}</b>\n` +
         (prUrl ? `PR: ${prUrl}` : "PR created (check issue detail for link)")
       );
+
+      // Clean up worktree on success (branch is already pushed)
+      try {
+        execFileSync("git", ["worktree", "remove", worktreeDir, "--force"], {
+          cwd: repo.localRepoPath, stdio: "ignore",
+        });
+        execFileSync("git", ["worktree", "prune"], { cwd: repo.localRepoPath, stdio: "ignore" });
+      } catch { /* best effort */ }
     }
 
   } catch (err) {

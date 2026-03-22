@@ -31,9 +31,19 @@ export async function POST(
     // Reset to the phase that failed
     const resumeStatus = PHASE_STATUS_MAP[issue.currentPhase] || "pending";
 
+    // Clear stale outputs for the failed phase and all subsequent phases
+    const clearFields: Record<string, null> = {};
+    const phase = issue.currentPhase;
+    if (phase <= 1) clearFields.planOutput = null;
+    if (phase <= 2) clearFields.planReview1 = null;
+    if (phase <= 3) clearFields.planReview2 = null;
+    if (phase <= 5) clearFields.codeReview1 = null;
+    if (phase <= 6) clearFields.codeReview2 = null;
+
     const [updated] = await db
       .update(issues)
       .set({
+        ...clearFields,
         status: resumeStatus,
         error: null,
         lockedBy: null,

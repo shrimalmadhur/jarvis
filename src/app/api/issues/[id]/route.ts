@@ -3,7 +3,6 @@ import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { ISSUE_STATUSES } from "@/lib/issues/types";
 
 export async function GET(
   _request: Request,
@@ -80,8 +79,10 @@ export async function PATCH(
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
     if (body.status) {
-      if (!(ISSUE_STATUSES as readonly string[]).includes(body.status)) {
-        return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+      // Only allow setting to "failed" (cancellation) via PATCH.
+      // Other status transitions are managed by the pipeline itself.
+      if (body.status !== "failed") {
+        return NextResponse.json({ error: "Only 'failed' status can be set via PATCH (cancellation)" }, { status: 400 });
       }
       updateData.status = body.status;
     }

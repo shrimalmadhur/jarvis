@@ -44,6 +44,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate bot token format to prevent URL manipulation
+    if (!/^\d+:[A-Za-z0-9_-]{35,}$/.test(botToken)) {
+      return NextResponse.json(
+        { error: "Invalid bot token format" },
+        { status: 400 }
+      );
+    }
+
     // Test connection if requested
     if (test) {
       const result = await testTelegramNotification(botToken, chatId);

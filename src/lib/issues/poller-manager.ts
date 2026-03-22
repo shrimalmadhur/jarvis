@@ -107,11 +107,18 @@ export async function startPendingPipelines(config: IssuesTelegramConfig) {
 }
 
 export async function startResumedPipelines(config: IssuesTelegramConfig) {
+  // Respect concurrency cap (same as startPendingPipelines)
+  const [{ activeCount }] = await db.select({ activeCount: sql<number>`count(*)` })
+    .from(issues).where(isNotNull(issues.lockedBy));
+  if (activeCount >= MAX_CONCURRENT_PIPELINES) return;
+
+  const slotsAvailable = MAX_CONCURRENT_PIPELINES - activeCount;
   const resumedIssues = await db.select().from(issues)
     .where(and(
       sql`${issues.status} NOT IN ('pending', 'completed', 'failed', 'waiting_for_input')`,
       isNull(issues.lockedBy)
-    ));
+    ))
+    .limit(slotsAvailable);
 
   for (const issue of resumedIssues) {
     const lockId = crypto.randomUUID();
