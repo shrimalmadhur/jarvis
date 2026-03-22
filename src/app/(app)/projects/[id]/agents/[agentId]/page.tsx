@@ -265,6 +265,14 @@ interface TelegramConfigData {
   botName: string;
 }
 
+interface ExistingBot {
+  id: string;
+  maskedToken: string;
+  botName: string;
+  chatId: string;
+  source: string;
+}
+
 type SetupPhase = "idle" | "validating" | "polling" | "manual" | "found" | "saving";
 
 const inputClasses =
@@ -282,6 +290,9 @@ function TelegramSection({ agentId }: { agentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
   const [testing, setTesting] = useState(false);
+  const [existingBots, setExistingBots] = useState<ExistingBot[]>([]);
+  const [botsLoading, setBotsLoading] = useState(true);
+  const [copying, setCopying] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/agents/${agentId}/telegram`)
@@ -289,6 +300,14 @@ function TelegramSection({ agentId }: { agentId: string }) {
       .then((data: TelegramConfigData) => setConfig(data))
       .catch(() => setConfig(null))
       .finally(() => setLoading(false));
+  }, [agentId]);
+
+  useEffect(() => {
+    fetch(`/api/notifications/telegram/bots?exclude=${agentId}`)
+      .then((r) => r.json())
+      .then((data) => setExistingBots(data.bots || []))
+      .catch(() => setExistingBots([]))
+      .finally(() => setBotsLoading(false));
   }, [agentId]);
 
   useEffect(() => {
@@ -408,6 +427,43 @@ function TelegramSection({ agentId }: { agentId: string }) {
     }
   };
 
+  const handleUseExisting = async (bot: ExistingBot) => {
+    setCopying(bot.id);
+    setError(null);
+    setTestResult(null);
+    try {
+      const copyRes = await fetch("/api/notifications/telegram/bots/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceConfigId: bot.id, targetAgentId: agentId }),
+      });
+      if (!copyRes.ok) {
+        const data = await copyRes.json();
+        setError(data.error || "Failed to copy bot config");
+        setCopying(null);
+        return;
+      }
+
+      // Reload config first so UI shows configured state even if test fails
+      const cfgRes = await fetch(`/api/agents/${agentId}/telegram`);
+      const cfgData = await cfgRes.json();
+      setConfig(cfgData);
+
+      // Test using stored credentials (raw token stays server-side)
+      const testRes = await fetch(`/api/agents/${agentId}/telegram/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useStored: true }),
+      });
+      const testData = await testRes.json();
+      setTestResult(testData.success ? { success: true } : { success: false, error: testData.error || "Test failed" });
+    } catch {
+      setError("Failed to configure bot");
+    } finally {
+      setCopying(null);
+    }
+  };
+
   if (loading) return <div className="py-4 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-muted" /></div>;
 
   if (config?.configured && phase === "idle") {
@@ -441,13 +497,42 @@ function TelegramSection({ agentId }: { agentId: string }) {
   return (
     <div className="space-y-3">
       {(phase === "idle" || phase === "validating") && (
-        <div className="space-y-2">
-          <label className="block text-[14px] text-muted">Bot Token</label>
-          <input type="password" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder="123456:ABC-DEFGhijklmnop..." className={inputClasses} disabled={phase === "validating"} />
-          <p className="text-[13px] text-muted">Create a bot via <span className="font-medium text-muted-foreground">@BotFather</span> on Telegram, then paste the token here.</p>
-          <button onClick={handleValidate} disabled={!botToken.trim() || phase === "validating"} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-50">
-            {phase === "validating" ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Validating...</span> : "Connect"}
-          </button>
+        <div className="space-y-3">
+          {!botsLoading && existingBots.length > 0 && (
+            <>
+              <div className="space-y-2">
+                <label className="block text-[14px] text-muted">Use an existing bot</label>
+                {existingBots.map((bot) => (
+                  <div key={bot.id} className="flex items-center justify-between rounded-lg border border-border bg-surface-raised px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-medium text-foreground truncate">{bot.botName || bot.maskedToken}</div>
+                      <div className="text-[13px] text-muted">{bot.source} &middot; Chat: {bot.chatId}</div>
+                    </div>
+                    <button
+                      onClick={() => handleUseExisting(bot)}
+                      disabled={copying !== null || phase !== "idle"}
+                      className="ml-3 shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-50"
+                    >
+                      {copying === bot.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Use"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 text-[13px] text-muted">
+                <div className="h-px flex-1 bg-border" />
+                <span>or set up a new bot</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
+          <div className="space-y-2">
+            <label className="block text-[14px] text-muted">Bot Token</label>
+            <input type="password" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder="123456:ABC-DEFGhijklmnop..." className={inputClasses} disabled={phase === "validating" || copying !== null} />
+            <p className="text-[13px] text-muted">Create a bot via <span className="font-medium text-muted-foreground">@BotFather</span> on Telegram, then paste the token here.</p>
+            <button onClick={handleValidate} disabled={!botToken.trim() || phase === "validating" || copying !== null} className="rounded-lg bg-accent px-3 py-1.5 text-[14px] font-medium text-accent-foreground transition-colors hover:bg-accent-dim disabled:opacity-50">
+              {phase === "validating" ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Validating...</span> : "Connect"}
+            </button>
+          </div>
         </div>
       )}
       {phase === "polling" && botInfo && (
