@@ -504,6 +504,32 @@ End with:
 - "VERDICT: FAIL" if there are blocking gaps`;
 }
 
+function buildPlanFixPrompt(plan: string, adversarialReview: string, completenessReview: string): string {
+  return `You are an expert plan fixer. Your job is to surgically revise an implementation plan to address ALL findings from two independent reviewers.
+
+## Current Plan
+${plan}
+
+## Adversarial Review Findings
+${adversarialReview}
+
+## Completeness Review Findings
+${completenessReview}
+
+## Instructions
+1. Read EVERY finding from both reviewers — CRITICAL, WARNING, and NOTE severity
+2. For each finding, make the MINIMUM change to the plan that fully addresses it
+3. Do NOT rewrite the plan from scratch — preserve all parts that were not flagged
+4. If a finding suggests a specific fix, incorporate it directly
+5. If two findings conflict, prefer the safer/more correct approach
+6. Ensure the revised plan is still coherent and self-consistent after all fixes
+
+## Output Format
+Output the COMPLETE revised plan (not just the diffs). The output must be a standalone, clean plan that can be handed directly to an implementer. Do NOT include a changelog or summary of what was changed — just output the revised plan.
+
+End with "VERDICT: READY" to indicate the revised plan is complete.`;
+}
+
 function buildImplementationPrompt(plan: string, review1: string, review2: string): string {
   return `Implement the following plan. Follow it precisely, incorporating the review feedback.
 
@@ -768,78 +794,83 @@ export async function runIssuePipeline(
       let planOutput = "";
       let planIterations = 0;
       let planApproved = false;
+      let skipPlanning = false; // Set after plan-fix to go directly to re-review
 
       while (!planApproved && planIterations < MAX_PLAN_ITERATIONS) {
-        // Hoist DB queries above the branching logic (avoids duplication)
-        const [currentIssue] = await db.select().from(issues).where(eq(issues.id, issueId));
-        const userAnswers = await getUserAnswers(issueId);
+        if (!skipPlanning) {
+          // Hoist DB queries above the branching logic (avoids duplication)
+          const [currentIssue] = await db.select().from(issues).where(eq(issues.id, issueId));
+          const userAnswers = await getUserAnswers(issueId);
 
-        // Build the full prompt (used for fresh sessions and as fallback)
-        const freshPrompt = buildFullPlanningPrompt(
-          issue.description, planOutput, currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
-        );
-
-        // Run Phase 1 — create, resume, or fresh fallback
-        let planResult: PipelinePhaseResult;
-
-        if (isFirstPlanRun) {
-          // CREATE the planning session
-          planResult = await runClaudePhase({
-            workdir: worktreeDir,
-            prompt: freshPrompt,
-            systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
-            timeoutMs: PHASE_TIMEOUT_MS,
-            sessionId: planningSessionId,
-          });
-          isFirstPlanRun = false;
-        } else if (resumeSupported) {
-          // RESUME the planning session (keeps exploration context!)
-          const resumePrompt = buildResumePlanningPrompt(
-            currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
+          // Build the full prompt (used for fresh sessions and as fallback)
+          const freshPrompt = buildFullPlanningPrompt(
+            issue.description, planOutput, currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
           );
-          planResult = await runClaudePhase({
-            workdir: worktreeDir,
-            prompt: resumePrompt,
-            timeoutMs: PHASE_TIMEOUT_MS,
-            resumeSessionId: planningSessionId,
-          });
 
-          // If resume failed (not timeout), fall back to fresh session with full context
-          if (!planResult.success && !planResult.timedOut) {
-            console.log("[pipeline] Planning resume failed, falling back to fresh session");
+          // Run Phase 1 — create, resume, or fresh fallback
+          let planResult: PipelinePhaseResult;
+
+          if (isFirstPlanRun) {
+            // CREATE the planning session
+            planResult = await runClaudePhase({
+              workdir: worktreeDir,
+              prompt: freshPrompt,
+              systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
+              timeoutMs: PHASE_TIMEOUT_MS,
+              sessionId: planningSessionId,
+            });
+            isFirstPlanRun = false;
+          } else if (resumeSupported) {
+            // RESUME the planning session (keeps exploration context!)
+            const resumePrompt = buildResumePlanningPrompt(
+              currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
+            );
+            planResult = await runClaudePhase({
+              workdir: worktreeDir,
+              prompt: resumePrompt,
+              timeoutMs: PHASE_TIMEOUT_MS,
+              resumeSessionId: planningSessionId,
+            });
+
+            // If resume failed (not timeout), fall back to fresh session with full context
+            if (!planResult.success && !planResult.timedOut) {
+              console.log("[pipeline] Planning resume failed, falling back to fresh session");
+              const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
+              planResult = fresh.result;
+              planningSessionId = fresh.sessionId;
+            }
+          } else {
+            // Resume not supported — fresh session each iteration (current behavior)
             const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
             planResult = fresh.result;
             planningSessionId = fresh.sessionId;
           }
-        } else {
-          // Resume not supported — fresh session each iteration (current behavior)
-          const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
-          planResult = fresh.result;
-          planningSessionId = fresh.sessionId;
-        }
 
-        if (!planResult.success) {
-          await failIssue(issueId, `Planning failed: ${planResult.output.substring(0, 2000)}`);
-          return;
-        }
-
-        phaseSessionIds["1"] = planResult.sessionId!;
-        planOutput = planResult.output;
-        await db.update(issues).set({
-          planOutput,
-          planningSessionId,
-          phaseSessionIds,
-          updatedAt: new Date(),
-        }).where(eq(issues.id, issueId));
-
-        // Handle questions
-        if (planResult.hasQuestions && planResult.questions) {
-          const answered = await handleQuestions(issueId, planResult.questions, telegramConfig);
-          if (!answered) {
-            await failIssue(issueId, "Timed out waiting for user reply to questions");
+          if (!planResult.success) {
+            await failIssue(issueId, `Planning failed: ${planResult.output.substring(0, 2000)}`);
             return;
           }
-          continue;
+
+          phaseSessionIds["1"] = planResult.sessionId!;
+          planOutput = planResult.output;
+          await db.update(issues).set({
+            planOutput,
+            planningSessionId,
+            phaseSessionIds,
+            updatedAt: new Date(),
+          }).where(eq(issues.id, issueId));
+
+          // Handle questions
+          if (planResult.hasQuestions && planResult.questions) {
+            const answered = await handleQuestions(issueId, planResult.questions, telegramConfig);
+            if (!answered) {
+              await failIssue(issueId, "Timed out waiting for user reply to questions");
+              return;
+            }
+            continue;
+          }
+        } else {
+          skipPlanning = false;
         }
 
         // Count this as a plan iteration (questions don't consume iterations)
@@ -876,15 +907,84 @@ export async function runIssuePipeline(
           updatedAt: new Date(),
         }).where(eq(issues.id, issueId));
 
-        // FAIL if EITHER reviewer found CRITICAL issues
+        // Check if EITHER reviewer found CRITICAL issues (VERDICT: FAIL)
         const review1Failed = /VERDICT:\s*FAIL/i.test(review1Result.output);
         const review2Failed = /VERDICT:\s*FAIL/i.test(review2Result.output);
 
         if (review1Failed || review2Failed) {
           if (planIterations >= MAX_PLAN_ITERATIONS) break;
+          if (await isCancelled(issueId)) return;
+
+          // ── Plan Fix: surgically address review findings ──
           await notify(telegramConfig,
-            `Plan verification found issues. Re-planning (attempt ${planIterations + 1}/${MAX_PLAN_ITERATIONS})...`
+            `Plan review round ${planIterations} failed. Fixing plan before attempt ${planIterations + 1}...`
           );
+
+          const capPerInput = Math.floor(MAX_FALLBACK_CHARS / 3) - 500;
+          const fixPrompt = buildPlanFixPrompt(
+            planOutput.substring(0, capPerInput),
+            review1Result.output.substring(0, capPerInput),
+            review2Result.output.substring(0, capPerInput),
+          );
+          let fixResult: PipelinePhaseResult;
+
+          if (resumeSupported && planningSessionId) {
+            // Resume the planning session with fix instructions (preserves exploration context)
+            fixResult = await runClaudePhase({
+              workdir: worktreeDir,
+              prompt: fixPrompt,
+              timeoutMs: PHASE_TIMEOUT_MS,
+              resumeSessionId: planningSessionId,
+            });
+
+            // Fallback to fresh session if resume fails
+            if (!fixResult.success && !fixResult.timedOut) {
+              console.log("[pipeline] Plan fix resume failed, falling back to fresh session");
+              fixResult = await runClaudePhase({
+                workdir: worktreeDir,
+                prompt: fixPrompt,
+                systemPrompt: "You are an expert plan fixer. Surgically revise the plan to address all review findings.",
+                timeoutMs: PHASE_TIMEOUT_MS,
+              });
+              // Keep planningSessionId in sync so subsequent resumes don't hit a stale session
+              if (fixResult.sessionId) {
+                planningSessionId = fixResult.sessionId;
+                await db.update(issues).set({ planningSessionId, updatedAt: new Date() })
+                  .where(eq(issues.id, issueId));
+              }
+            }
+          } else {
+            fixResult = await runClaudePhase({
+              workdir: worktreeDir,
+              prompt: fixPrompt,
+              systemPrompt: "You are an expert plan fixer. Surgically revise the plan to address all review findings.",
+              timeoutMs: PHASE_TIMEOUT_MS,
+            });
+            if (fixResult.sessionId) {
+              planningSessionId = fixResult.sessionId;
+              await db.update(issues).set({ planningSessionId, updatedAt: new Date() })
+                .where(eq(issues.id, issueId));
+            }
+          }
+
+          if (fixResult.success && fixResult.output.trim()) {
+            // Only accept if the fix agent signals completion; strip verdict marker
+            if (/VERDICT:\s*READY/i.test(fixResult.output)) {
+              planOutput = fixResult.output
+                .replace(/\n*VERDICT:\s*READY[^\n]*/gi, "")
+                .trim();
+              await db.update(issues).set({
+                planOutput,
+                updatedAt: new Date(),
+              }).where(eq(issues.id, issueId));
+            } else {
+              console.warn("[pipeline] Plan fix did not include VERDICT: READY, keeping original plan");
+            }
+          } else {
+            console.warn(`[pipeline] Plan fix failed (success=${fixResult.success}). Retrying with original plan.`);
+          }
+
+          skipPlanning = true;
           continue;
         }
 
