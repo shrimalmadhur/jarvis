@@ -328,10 +328,10 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
         {/* Phase outputs */}
         <CollapsibleSection title="The Plot" content={issue.planOutput} defaultOpen={issue.currentPhase <= 3} />
-        <CollapsibleSection title="Snape's Inspection" content={issue.planReview1} />
-        <CollapsibleSection title="McGonagall's Review" content={issue.planReview2} />
-        <CollapsibleSection title="O.W.L. Results" content={issue.codeReview1} />
-        <CollapsibleSection title="N.E.W.T. Results" content={issue.codeReview2} />
+        <CollapsibleSection title="Adversarial Review" content={issue.planReview1} />
+        <CollapsibleSection title="Completeness Review" content={issue.planReview2} />
+        <CollapsibleSection title="Code Review (3 Specialists)" content={issue.codeReview1} />
+        <CollapsibleSection title="Code Fixes" content={issue.codeReview2} />
 
         {/* Q&A Thread */}
         {issue.messages.length > 0 && (

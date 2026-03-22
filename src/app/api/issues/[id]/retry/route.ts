@@ -35,8 +35,9 @@ export async function POST(
     const clearFields: Record<string, null> = {};
     const phase = issue.currentPhase;
     if (phase <= 1) clearFields.planOutput = null;
-    if (phase <= 2) clearFields.planReview1 = null;
-    if (phase <= 3) clearFields.planReview2 = null;
+    // Phase 2 produces both plan reviews in parallel
+    if (phase <= 2) { clearFields.planReview1 = null; clearFields.planReview2 = null; }
+    if (phase === 3) { clearFields.planReview1 = null; clearFields.planReview2 = null; } // backward compat
     if (phase <= 5) clearFields.codeReview1 = null;
     if (phase <= 6) clearFields.codeReview2 = null;
 
@@ -46,6 +47,7 @@ export async function POST(
         ...clearFields,
         status: resumeStatus,
         error: null,
+        planningSessionId: null, // Force fresh session on retry
         lockedBy: null,
         lockedAt: null,
         updatedAt: new Date(),

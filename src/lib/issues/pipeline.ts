@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
+import { getSetting, setSetting } from "@/lib/db/app-settings";
 import { sendTelegramMessageWithId, sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
 import type { IssuesTelegramConfig, PipelinePhaseResult, IssueStatus } from "./types";
 import {
-  PHASE_STATUS_MAP, MAX_PLAN_ITERATIONS,
+  PHASE_STATUS_MAP, MAX_PLAN_ITERATIONS, MAX_CODE_REVIEW_ITERATIONS,
   PHASE_TIMEOUT_MS, IMPL_TIMEOUT_MS, QA_TIMEOUT_MS,
 } from "./types";
 
@@ -36,9 +37,79 @@ export function buildWorktreePath(repoPath: string, slug: string, shortId: strin
   return join(repoPath, ".claude", "worktrees", `${slug}-${shortId}`);
 }
 
+// ── Resume capability check (appSettings-cached, globalThis for HMR) ──
+
+const _g = globalThis as unknown as { _resumeCheckPromise?: Promise<boolean>; _resumeCheckAt?: number };
+const RESUME_CHECK_IN_MEMORY_TTL = 60 * 60 * 1000; // 1 hour — re-check DB after this
+
+async function isResumeSupported(): Promise<boolean> {
+  // Clear stale in-memory cache so DB TTL takes effect for long-running processes
+  if (_g._resumeCheckPromise && _g._resumeCheckAt && Date.now() - _g._resumeCheckAt > RESUME_CHECK_IN_MEMORY_TTL) {
+    _g._resumeCheckPromise = undefined;
+  }
+  if (!_g._resumeCheckPromise) {
+    _g._resumeCheckAt = Date.now();
+    _g._resumeCheckPromise = doResumeCheck().catch((err) => {
+      console.error("[pipeline] Resume check failed, will retry:", err);
+      _g._resumeCheckPromise = undefined;
+      return false;
+    });
+  }
+  return _g._resumeCheckPromise;
+}
+
+async function doResumeCheck(): Promise<boolean> {
+  // Check DB cache first (survives process restarts)
+  const cached = getSetting("claude-resume-supported");
+  const checkedAt = getSetting("claude-resume-checked-at");
+
+  if (cached !== null && checkedAt) {
+    const supported = cached === "true";
+    const age = Date.now() - new Date(checkedAt).getTime();
+    // Cache true for 7 days; cache false for only 1 hour (self-heals after transient failures)
+    const ttl = supported ? 7 * 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
+    if (age < ttl) {
+      console.log(`[pipeline] Resume capability cached: ${supported}`);
+      return supported;
+    }
+  }
+
+  console.log("[pipeline] Checking --resume capability...");
+
+  // Run verification: create a session, then resume it
+  const testId = crypto.randomUUID();
+  const create = await runClaudePhase({
+    workdir: "/tmp",
+    prompt: "Reply with exactly: VERIFY_OK",
+    timeoutMs: 30_000,
+    sessionId: testId,
+  });
+  if (!create.success || !create.output.includes("VERIFY_OK")) {
+    console.log("[pipeline] Resume check: create phase failed, marking unsupported");
+    cacheResumeResult(false);
+    return false;
+  }
+
+  const resume = await runClaudePhase({
+    workdir: "/tmp",
+    prompt: "Reply with exactly: RESUME_OK",
+    timeoutMs: 30_000,
+    resumeSessionId: testId,
+  });
+  const supported = resume.success && resume.output.includes("RESUME_OK");
+  console.log(`[pipeline] Resume capability: ${supported}`);
+  cacheResumeResult(supported);
+  return supported;
+}
+
+function cacheResumeResult(supported: boolean) {
+  setSetting("claude-resume-supported", String(supported));
+  setSetting("claude-resume-checked-at", new Date().toISOString());
+}
+
 /**
  * Run a single Claude CLI phase.
- * Prompt is piped via stdin. Uses --session-id with pre-generated UUID.
+ * Prompt is piped via stdin. Uses --session-id or --resume.
  * Parses stream-json output for result text.
  */
 async function runClaudePhase(opts: {
@@ -47,16 +118,26 @@ async function runClaudePhase(opts: {
   systemPrompt?: string;
   timeoutMs?: number;
   sessionId?: string;
+  resumeSessionId?: string;
 }): Promise<PipelinePhaseResult> {
-  const sessionId = opts.sessionId || crypto.randomUUID();
+  // Compute once, use everywhere — no double-UUID risk
+  const effectiveSessionId = opts.resumeSessionId || opts.sessionId || crypto.randomUUID();
+
   const args = [
     "-p",
     "--verbose",
     "--output-format", "stream-json",
     "--dangerously-skip-permissions",
-    "--session-id", sessionId,
   ];
-  if (opts.systemPrompt) {
+
+  if (opts.resumeSessionId) {
+    args.push("--resume", opts.resumeSessionId);
+  } else {
+    args.push("--session-id", effectiveSessionId);
+  }
+
+  // System prompt only on creation (resumed sessions inherit it)
+  if (opts.systemPrompt && !opts.resumeSessionId) {
     args.push("--append-system-prompt", opts.systemPrompt);
   }
 
@@ -155,15 +236,16 @@ async function runClaudePhase(opts: {
       resolve({
         success: code === 0 && !timedOut,
         output,
-        sessionId,
+        sessionId: effectiveSessionId,
         hasQuestions,
         questions,
+        timedOut,
       });
     });
 
     proc.on("error", (err) => {
       clearTimeout(timer);
-      resolve({ success: false, output: err.message, sessionId });
+      resolve({ success: false, output: err.message, sessionId: effectiveSessionId });
     });
   });
 }
@@ -256,6 +338,84 @@ async function getUserAnswers(issueId: string): Promise<string | null> {
   return messages.map(m => m.message).join("\n\n");
 }
 
+/** Extract a PipelinePhaseResult from a settled promise, returning a failure result on rejection. */
+function settledResult(r: PromiseSettledResult<PipelinePhaseResult>): PipelinePhaseResult {
+  if (r.status === "fulfilled") return r.value;
+  return { success: false, output: `Agent failed: ${String(r.reason)}` };
+}
+
+// ── Planning session helpers ─────────────────────────────────
+
+/** Create a fresh planning session with a new UUID. Updates planningSessionId in DB. */
+async function createFreshPlanningSession(
+  workdir: string,
+  prompt: string,
+  issueId: string,
+): Promise<{ result: PipelinePhaseResult; sessionId: string }> {
+  const sessionId = crypto.randomUUID();
+  const result = await runClaudePhase({
+    workdir,
+    prompt,
+    systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
+    timeoutMs: PHASE_TIMEOUT_MS,
+    sessionId,
+  });
+  await db.update(issues).set({ planningSessionId: sessionId, updatedAt: new Date() })
+    .where(eq(issues.id, issueId));
+  return { result, sessionId };
+}
+
+/** Build a prompt for resumed planning sessions (only new context, no duplicate planning prompt). */
+function buildResumePlanningPrompt(
+  reviewFeedback: string | null | undefined,
+  completenessReview: string | null | undefined,
+  userAnswers: string | null,
+): string {
+  if (reviewFeedback) {
+    return `Your previous plan was reviewed and found to have issues. Create a REVISED plan addressing all feedback below.
+
+## Review Feedback
+${reviewFeedback}
+${completenessReview ? `\n## Completeness Review Feedback\n${completenessReview}` : ""}
+${userAnswers ? `\n## User's Answers to Your Questions\n${userAnswers}` : ""}
+
+Revise your implementation plan to address all the review feedback. Include the "## Codebase Analysis" section again.
+End with "VERDICT: READY" or "## Questions" if you need more information.`;
+  }
+  if (userAnswers) {
+    return `Here are the answers to your questions:
+
+${userAnswers}
+
+Please update your implementation plan based on these answers. Include the "## Codebase Analysis" section.
+End with "VERDICT: READY" or "## Questions" if you need more information.`;
+  }
+  // Resuming after crash with no new context — ask to continue
+  return `Continue your implementation plan where you left off. Include the "## Codebase Analysis" section.
+End with "VERDICT: READY" or "## Questions" if you need more information.`;
+}
+
+/** Build a full planning prompt with all available context (for fresh sessions). */
+function buildFullPlanningPrompt(
+  description: string,
+  planOutput: string,
+  reviewFeedback: string | null | undefined,
+  completenessReview: string | null | undefined,
+  userAnswers: string | null,
+): string {
+  let prompt = buildPlanningPrompt(description);
+  if (planOutput && reviewFeedback) {
+    prompt += `\n\n## Previous Plan Review Feedback\n${reviewFeedback}`;
+  }
+  if (planOutput && completenessReview) {
+    prompt += `\n\n## Completeness Review Feedback\n${completenessReview}`;
+  }
+  if (userAnswers) {
+    prompt += `\n\n## User's Answers to Questions\n${userAnswers}`;
+  }
+  return prompt;
+}
+
 // ── Prompt builders ──────────────────────────────────────────
 
 function buildPlanningPrompt(description: string): string {
@@ -277,6 +437,14 @@ Provide a structured plan with:
 - Detailed steps with file paths
 - Any new dependencies needed
 - Testing strategy
+
+**Important**: Include a "## Codebase Analysis" section with:
+- Key file paths you examined and their purposes
+- Relevant code patterns and conventions observed
+- Critical code snippets that the implementer must reference
+- Architecture notes (how components connect)
+
+This analysis will be used by the implementation phase, so be thorough.
 
 End with either:
 - "VERDICT: READY" if the plan is complete
@@ -310,14 +478,11 @@ End with:
 - "VERDICT: FAIL" if CRITICAL issues exist`;
 }
 
-function buildCompletenessReviewPrompt(plan: string, review1: string): string {
+function buildCompletenessReviewPrompt(plan: string): string {
   return `You are a completeness and feasibility reviewer.
 
 ## Plan
 ${plan}
-
-## Previous Review Feedback
-${review1}
 
 ## Instructions
 Check the plan for:
@@ -362,42 +527,140 @@ ${review2}
 Do NOT create a PR — that will be done in a separate step.`;
 }
 
-function buildCodeReview1Prompt(defaultBranch: string): string {
-  return `Review the code changes on this branch compared to ${defaultBranch}.
+// ── Specialist code review prompts (READ-ONLY) ──────────────
+
+function buildBugsLogicReviewPrompt(defaultBranch: string): string {
+  return `You are a specialist code reviewer focused on BUGS AND LOGIC ERRORS.
+Your job is to FIND defects — do NOT modify any files.
 
 ## Instructions
 1. Run \`git diff ${defaultBranch}...HEAD\` to see all changes
-2. Review for:
-   - Bugs and logic errors
-   - Security vulnerabilities (injection, XSS, etc.)
-   - Missing error handling
-   - Performance issues
-   - Code style consistency
-3. **Fix any issues you find** — do not just report them
-4. Run the test suite and fix any failures
-5. Commit your fixes
+2. Read every changed file in full for context
+3. For each change, actively try to break it:
+   - Logic errors, wrong conditions, inverted booleans, off-by-one
+   - Null/undefined handling gaps
+   - Race conditions and concurrency bugs
+   - Missing error handling, swallowed errors
+   - Boundary conditions (empty, zero, MAX_INT, very large inputs)
+4. DO NOT modify any files. You are a READ-ONLY reviewer.
+
+## Output Format
+For each issue found:
+- **Severity**: CRITICAL / WARNING / NOTE
+- **File**: exact file path and line number
+- **Bug**: What's wrong (be specific)
+- **Proof**: Input or scenario that triggers the bug
+- **Fix**: Suggested code change
 
 End with:
-- "VERDICT: PASS" if the code is ready for final review
-- "VERDICT: FAIL" if there are unfixable issues`;
+- "VERDICT: PASS" if no CRITICAL issues found
+- "VERDICT: FAIL" if CRITICAL issues exist`;
 }
 
-function buildCodeReview2Prompt(defaultBranch: string): string {
-  return `Perform a final verification of the code changes on this branch compared to ${defaultBranch}.
+function buildSecurityEdgeCasesReviewPrompt(defaultBranch: string): string {
+  return `You are a specialist code reviewer focused on SECURITY AND EDGE CASES.
+Your job is to FIND vulnerabilities — do NOT modify any files.
 
 ## Instructions
 1. Run \`git diff ${defaultBranch}...HEAD\` to see all changes
-2. Verify:
-   - All previous review issues were addressed
-   - Tests pass and cover the new code
-   - No regressions in existing functionality
-   - Code is clean and well-documented
-3. Fix any remaining minor issues
-4. Run the full test suite one final time
+2. Read every changed file in full for context
+3. Analyze from an attacker's perspective:
+   - Injection (SQL, command, XSS, path traversal, SSRF)
+   - Authentication/authorization bypasses
+   - Sensitive data exposure in logs, errors, responses
+   - Input validation gaps (malformed input, special chars, huge strings)
+   - Denial of service vectors (regex DoS, unbounded queries)
+   - Edge cases: empty inputs, concurrent requests, partial failures
+4. DO NOT modify any files. You are a READ-ONLY reviewer.
+
+## Output Format
+For each issue found:
+- **Severity**: CRITICAL / WARNING / NOTE
+- **File**: exact file path and line number
+- **Vulnerability**: What's the issue
+- **Attack scenario**: How to exploit it
+- **Fix**: Suggested remediation
 
 End with:
-- "VERDICT: PASS" if everything looks good
-- "VERDICT: FAIL" with explanation if not`;
+- "VERDICT: PASS" if no CRITICAL issues found
+- "VERDICT: FAIL" if CRITICAL issues exist`;
+}
+
+function buildDesignPerformanceReviewPrompt(defaultBranch: string): string {
+  return `You are a specialist code reviewer focused on DESIGN AND PERFORMANCE.
+Your job is to FIND design issues — do NOT modify any files.
+
+## Instructions
+1. Run \`git diff ${defaultBranch}...HEAD\` to see all changes
+2. Read changed files and related files for context
+3. Evaluate:
+   - Violations of existing code patterns and conventions
+   - Missing or inadequate test coverage
+   - API design issues (breaking changes, inconsistent interfaces)
+   - Performance problems (N+1 queries, unnecessary work, large allocations)
+   - Code duplication or missing abstractions
+   - Backwards compatibility concerns
+4. DO NOT modify any files. You are a READ-ONLY reviewer.
+
+## Output Format
+For each issue found:
+- **Severity**: CRITICAL / WARNING / NOTE
+- **File**: exact file path and line number
+- **Issue**: What's wrong
+- **Impact**: Concrete consequence
+- **Fix**: Suggested improvement
+
+End with:
+- "VERDICT: PASS" if no CRITICAL issues found
+- "VERDICT: FAIL" if CRITICAL issues exist`;
+}
+
+function buildCodeFixPrompt(
+  defaultBranch: string,
+  bugsReview: string,
+  securityReview: string,
+  designReview: string,
+): string {
+  return `Fix ALL issues identified by the code reviewers below.
+
+## Review Findings
+
+### Bugs & Logic Review
+${bugsReview}
+
+### Security & Edge Cases Review
+${securityReview}
+
+### Design & Performance Review
+${designReview}
+
+## Instructions
+1. Run \`git diff ${defaultBranch}...HEAD\` to see current changes
+2. Fix every CRITICAL finding listed above
+3. Fix WARNING findings where the fix is straightforward
+4. Run tests after each fix to ensure no regressions
+5. Commit your fixes with clear commit messages
+6. Do NOT create a PR
+
+End with:
+- "VERDICT: FIXED" if all CRITICAL issues were addressed
+- "VERDICT: PARTIAL" if some could not be fixed (explain why)`;
+}
+
+/** Verify worktree is clean after parallel read-only reviewers. Reset if dirty. */
+function ensureWorktreeClean(worktreeDir: string): void {
+  try {
+    const status = execFileSync("git", ["status", "--porcelain"], {
+      cwd: worktreeDir, encoding: "utf-8",
+    }).trim();
+    if (status) {
+      console.warn("[pipeline] Review agents modified worktree unexpectedly, resetting");
+      execFileSync("git", ["reset", "--hard", "HEAD"], { cwd: worktreeDir, stdio: "ignore" });
+      execFileSync("git", ["clean", "-fd"], { cwd: worktreeDir, stdio: "ignore" });
+    }
+  } catch (err) {
+    console.error("[pipeline] ensureWorktreeClean failed:", err);
+  }
 }
 
 function buildPrCreationPrompt(title: string, description: string, defaultBranch: string): string {
@@ -475,16 +738,24 @@ export async function runIssuePipeline(
     }
   }
 
+  const phaseSessionIds: Record<string, string> = issue.phaseSessionIds as Record<string, string> || {};
+
+  // Determine start phase (resume support)
+  const startPhase = issue.currentPhase > 0 ? issue.currentPhase : 1;
+
+  // Check if --resume is supported (cached in appSettings, globalThis for HMR)
+  const resumeSupported = await isResumeSupported();
+
+  // Living planning session: created in Phase 1 iter 1, resumed across iterations + Phase 4
+  let planningSessionId = issue.planningSessionId || crypto.randomUUID();
+  let isFirstPlanRun = !issue.planningSessionId; // true = --session-id (create), false = --resume
+
+  // Defer planningSessionId write until after first successful phase (avoids stale UUID on early failure)
   await db.update(issues).set({
     worktreePath: worktreeDir,
     branchName,
     updatedAt: new Date(),
   }).where(eq(issues.id, issueId));
-
-  const phaseSessionIds: Record<string, string> = issue.phaseSessionIds as Record<string, string> || {};
-
-  // Determine start phase (resume support)
-  const startPhase = issue.currentPhase > 0 ? issue.currentPhase : 1;
 
   try {
     // ── Phases 1-3: Planning + Reviews ─────────────────────
@@ -499,27 +770,53 @@ export async function runIssuePipeline(
       let planApproved = false;
 
       while (!planApproved && planIterations < MAX_PLAN_ITERATIONS) {
-        planIterations++;
-
-        let planPrompt = buildPlanningPrompt(issue.description);
-
-        // Include previous review feedback for re-planning
+        // Hoist DB queries above the branching logic (avoids duplication)
         const [currentIssue] = await db.select().from(issues).where(eq(issues.id, issueId));
-        if (planOutput && currentIssue?.planReview1) {
-          planPrompt += `\n\n## Previous Plan Review Feedback\n${currentIssue.planReview1}`;
-        }
-
         const userAnswers = await getUserAnswers(issueId);
-        if (userAnswers) {
-          planPrompt += `\n\n## User's Answers to Questions\n${userAnswers}`;
-        }
 
-        const planResult = await runClaudePhase({
-          workdir: worktreeDir,
-          prompt: planPrompt,
-          systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
-          timeoutMs: PHASE_TIMEOUT_MS,
-        });
+        // Build the full prompt (used for fresh sessions and as fallback)
+        const freshPrompt = buildFullPlanningPrompt(
+          issue.description, planOutput, currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
+        );
+
+        // Run Phase 1 — create, resume, or fresh fallback
+        let planResult: PipelinePhaseResult;
+
+        if (isFirstPlanRun) {
+          // CREATE the planning session
+          planResult = await runClaudePhase({
+            workdir: worktreeDir,
+            prompt: freshPrompt,
+            systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+            sessionId: planningSessionId,
+          });
+          isFirstPlanRun = false;
+        } else if (resumeSupported) {
+          // RESUME the planning session (keeps exploration context!)
+          const resumePrompt = buildResumePlanningPrompt(
+            currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
+          );
+          planResult = await runClaudePhase({
+            workdir: worktreeDir,
+            prompt: resumePrompt,
+            timeoutMs: PHASE_TIMEOUT_MS,
+            resumeSessionId: planningSessionId,
+          });
+
+          // If resume failed (not timeout), fall back to fresh session with full context
+          if (!planResult.success && !planResult.timedOut) {
+            console.log("[pipeline] Planning resume failed, falling back to fresh session");
+            const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
+            planResult = fresh.result;
+            planningSessionId = fresh.sessionId;
+          }
+        } else {
+          // Resume not supported — fresh session each iteration (current behavior)
+          const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
+          planResult = fresh.result;
+          planningSessionId = fresh.sessionId;
+        }
 
         if (!planResult.success) {
           await failIssue(issueId, `Planning failed: ${planResult.output.substring(0, 2000)}`);
@@ -530,6 +827,7 @@ export async function runIssuePipeline(
         planOutput = planResult.output;
         await db.update(issues).set({
           planOutput,
+          planningSessionId,
           phaseSessionIds,
           updatedAt: new Date(),
         }).where(eq(issues.id, issueId));
@@ -544,55 +842,49 @@ export async function runIssuePipeline(
           continue;
         }
 
-        // ── Phase 2: Plan Review #1 ──────────────────────────
+        // Count this as a plan iteration (questions don't consume iterations)
+        planIterations++;
+
+        // ── Phase 2: Plan Verification (2 reviewers in parallel) ──
         if (await isCancelled(issueId)) return;
         await updatePhase(issueId, 2, "reviewing_plan_1");
-        await notify(telegramConfig, `Plan review #1 started`);
+        await notify(telegramConfig, `Plan verification started (2 reviewers in parallel)`);
 
-        const review1Result = await runClaudePhase({
-          workdir: worktreeDir,
-          prompt: buildAdversarialReviewPrompt(planOutput),
-          systemPrompt: "You are an adversarial plan reviewer. Find problems, not validate.",
-          timeoutMs: PHASE_TIMEOUT_MS,
-        });
+        const planReviewResults = await Promise.allSettled([
+          runClaudePhase({
+            workdir: worktreeDir,
+            prompt: buildAdversarialReviewPrompt(planOutput),
+            systemPrompt: "You are an adversarial plan reviewer. Find problems, not validate.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+          }),
+          runClaudePhase({
+            workdir: worktreeDir,
+            prompt: buildCompletenessReviewPrompt(planOutput),
+            systemPrompt: "You are a completeness and feasibility reviewer. Find gaps.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+          }),
+        ]);
+        const review1Result = settledResult(planReviewResults[0]);
+        const review2Result = settledResult(planReviewResults[1]);
 
-        phaseSessionIds["2"] = review1Result.sessionId!;
+        if (review1Result.sessionId) phaseSessionIds["2"] = review1Result.sessionId;
+        if (review2Result.sessionId) phaseSessionIds["3"] = review2Result.sessionId;
         await db.update(issues).set({
           planReview1: review1Result.output,
-          phaseSessionIds,
-          updatedAt: new Date(),
-        }).where(eq(issues.id, issueId));
-
-        // Check verdict
-        if (/VERDICT:\s*FAIL/i.test(review1Result.output)) {
-          if (planIterations >= MAX_PLAN_ITERATIONS) break;
-          await notify(telegramConfig, `Plan review found critical issues. Re-planning (attempt ${planIterations + 1}/${MAX_PLAN_ITERATIONS})...`);
-          continue;
-        }
-
-        // ── Phase 3: Plan Review #2 ──────────────────────────
-        if (await isCancelled(issueId)) return;
-        await updatePhase(issueId, 3, "reviewing_plan_2");
-        await notify(telegramConfig, `Plan review #2 started`);
-
-        const review2Result = await runClaudePhase({
-          workdir: worktreeDir,
-          prompt: buildCompletenessReviewPrompt(planOutput, review1Result.output),
-          systemPrompt: "You are a completeness and feasibility reviewer. Find gaps.",
-          timeoutMs: PHASE_TIMEOUT_MS,
-        });
-
-        phaseSessionIds["3"] = review2Result.sessionId!;
-        await db.update(issues).set({
           planReview2: review2Result.output,
           phaseSessionIds,
           updatedAt: new Date(),
         }).where(eq(issues.id, issueId));
 
-        // Check verdict
-        if (/VERDICT:\s*FAIL/i.test(review2Result.output)) {
+        // FAIL if EITHER reviewer found CRITICAL issues
+        const review1Failed = /VERDICT:\s*FAIL/i.test(review1Result.output);
+        const review2Failed = /VERDICT:\s*FAIL/i.test(review2Result.output);
+
+        if (review1Failed || review2Failed) {
           if (planIterations >= MAX_PLAN_ITERATIONS) break;
-          await notify(telegramConfig, `Completeness review found gaps. Re-planning (attempt ${planIterations + 1}/${MAX_PLAN_ITERATIONS})...`);
+          await notify(telegramConfig,
+            `Plan verification found issues. Re-planning (attempt ${planIterations + 1}/${MAX_PLAN_ITERATIONS})...`
+          );
           continue;
         }
 
@@ -608,7 +900,7 @@ export async function runIssuePipeline(
       await notify(telegramConfig, `Plan approved. Starting implementation...`);
     }
 
-    // ── Phase 4: Implementation ────────────────────────────
+    // ── Phase 4: Implementation (resume planning session if possible) ──
     if (startPhase <= 4) {
       if (await isCancelled(issueId)) return;
       await updatePhase(issueId, 4, "implementing");
@@ -624,12 +916,43 @@ export async function runIssuePipeline(
         implPrompt += `\n\n## Additional Context from User\n${userAnswers}`;
       }
 
-      const implResult = await runClaudePhase({
-        workdir: worktreeDir,
-        prompt: implPrompt,
-        systemPrompt: "You are an expert software engineer. Implement the plan precisely.",
-        timeoutMs: IMPL_TIMEOUT_MS,
-      });
+      // Resume the planning session if the session exists and --resume is supported.
+      // Safe even on crash-resume: if resume fails, the fallback handles it below.
+      const canResume = (
+        startPhase <= 4 &&
+        currentIssue?.planningSessionId &&
+        resumeSupported
+      );
+
+      let implResult: PipelinePhaseResult;
+
+      if (canResume) {
+        implResult = await runClaudePhase({
+          workdir: worktreeDir,
+          prompt: implPrompt,
+          timeoutMs: IMPL_TIMEOUT_MS,
+          resumeSessionId: currentIssue!.planningSessionId!,
+        });
+
+        // If resume failed (not timeout), retry with fresh session
+        if (!implResult.success && !implResult.timedOut) {
+          console.log("[pipeline] Implementation resume failed, retrying with fresh session");
+          implResult = await runClaudePhase({
+            workdir: worktreeDir,
+            prompt: implPrompt,
+            systemPrompt: "You are an expert software engineer. Implement the plan precisely.",
+            timeoutMs: IMPL_TIMEOUT_MS,
+          });
+        }
+      } else {
+        // Fresh session (crash recovery, retry, or resume not supported)
+        implResult = await runClaudePhase({
+          workdir: worktreeDir,
+          prompt: implPrompt,
+          systemPrompt: "You are an expert software engineer. Implement the plan precisely.",
+          timeoutMs: IMPL_TIMEOUT_MS,
+        });
+      }
 
       if (!implResult.success) {
         await failIssue(issueId, `Implementation failed: ${implResult.output.substring(0, 2000)}`);
@@ -641,46 +964,148 @@ export async function runIssuePipeline(
       await notify(telegramConfig, `Implementation complete. Starting code review...`);
     }
 
-    // ── Phase 5: Code Review #1 ────────────────────────────
-    if (startPhase <= 5) {
-      if (await isCancelled(issueId)) return;
-      await updatePhase(issueId, 5, "reviewing_code_1");
-
-      const cr1Result = await runClaudePhase({
-        workdir: worktreeDir,
-        prompt: buildCodeReview1Prompt(repo.defaultBranch),
-        systemPrompt: "You are an expert code reviewer. Find and fix bugs, security issues, and design problems.",
-        timeoutMs: PHASE_TIMEOUT_MS,
-      });
-
-      phaseSessionIds["5"] = cr1Result.sessionId!;
-      await db.update(issues).set({
-        codeReview1: cr1Result.output,
-        phaseSessionIds,
-        updatedAt: new Date(),
-      }).where(eq(issues.id, issueId));
-      await notify(telegramConfig, `Code review #1 complete`);
-    }
-
-    // ── Phase 6: Code Review #2 (verify) ───────────────────
+    // ── Phases 5-6: Adversarial Code Review + Auto-Fix Loop ──
     if (startPhase <= 6) {
-      if (await isCancelled(issueId)) return;
-      await updatePhase(issueId, 6, "reviewing_code_2");
+      let codeApproved = false;
+      let crIterations = 0;
 
-      const cr2Result = await runClaudePhase({
-        workdir: worktreeDir,
-        prompt: buildCodeReview2Prompt(repo.defaultBranch),
-        systemPrompt: "You are a senior engineer performing final review. Verify correctness and test coverage.",
-        timeoutMs: PHASE_TIMEOUT_MS,
-      });
+      while (!codeApproved && crIterations < MAX_CODE_REVIEW_ITERATIONS) {
+        crIterations++;
 
-      phaseSessionIds["6"] = cr2Result.sessionId!;
-      await db.update(issues).set({
-        codeReview2: cr2Result.output,
-        phaseSessionIds,
-        updatedAt: new Date(),
-      }).where(eq(issues.id, issueId));
-      await notify(telegramConfig, `Code review #2 complete`);
+        // ── Phase 5: 3 specialist reviewers in parallel (READ-ONLY) ──
+        if (await isCancelled(issueId)) return;
+        await updatePhase(issueId, 5, "reviewing_code_1");
+        await notify(telegramConfig,
+          `Code review round ${crIterations}/${MAX_CODE_REVIEW_ITERATIONS} (3 specialist reviewers)`
+        );
+
+        const codeReviewResults = await Promise.allSettled([
+          runClaudePhase({
+            workdir: worktreeDir,
+            prompt: buildBugsLogicReviewPrompt(repo.defaultBranch),
+            systemPrompt: "You are a bugs & logic reviewer. DO NOT modify files.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+          }),
+          runClaudePhase({
+            workdir: worktreeDir,
+            prompt: buildSecurityEdgeCasesReviewPrompt(repo.defaultBranch),
+            systemPrompt: "You are a security reviewer. DO NOT modify files.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+          }),
+          runClaudePhase({
+            workdir: worktreeDir,
+            prompt: buildDesignPerformanceReviewPrompt(repo.defaultBranch),
+            systemPrompt: "You are a design & performance reviewer. DO NOT modify files.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+          }),
+        ]);
+        const bugsResult = settledResult(codeReviewResults[0]);
+        const securityResult = settledResult(codeReviewResults[1]);
+        const designResult = settledResult(codeReviewResults[2]);
+
+        // Verify reviewers didn't modify the worktree
+        ensureWorktreeClean(worktreeDir);
+
+        // Combine reviews with per-reviewer caps to stay under MAX_FALLBACK_CHARS
+        const capPerReviewer = Math.floor(MAX_FALLBACK_CHARS / 3) - 200;
+        const roundReview = [
+          `# Code Review Round ${crIterations}`,
+          "## Bugs & Logic Review\n" + bugsResult.output.substring(0, capPerReviewer),
+          "## Security & Edge Cases Review\n" + securityResult.output.substring(0, capPerReviewer),
+          "## Design & Performance Review\n" + designResult.output.substring(0, capPerReviewer),
+        ].join("\n\n---\n\n");
+
+        // Accumulate reviews across iterations (don't overwrite prior rounds)
+        const [prevIssue] = await db.select({ cr1: issues.codeReview1 }).from(issues).where(eq(issues.id, issueId));
+        const accumulatedReview = crIterations === 1
+          ? roundReview
+          : ((prevIssue?.cr1 || "") + "\n\n========================================\n\n" + roundReview).substring(0, MAX_FALLBACK_CHARS);
+
+        if (bugsResult.sessionId) phaseSessionIds["5"] = bugsResult.sessionId;
+        await db.update(issues).set({
+          codeReview1: accumulatedReview,
+          phaseSessionIds,
+          updatedAt: new Date(),
+        }).where(eq(issues.id, issueId));
+
+        // Check if all reviewers passed
+        const anyFailed = [bugsResult, securityResult, designResult].some(
+          r => /VERDICT:\s*FAIL/i.test(r.output)
+        );
+
+        if (!anyFailed) {
+          codeApproved = true;
+          await notify(telegramConfig, `All code reviews passed!`);
+          break;
+        }
+
+        if (crIterations >= MAX_CODE_REVIEW_ITERATIONS) break;
+
+        // ── Phase 6: Auto-fix all issues ──
+        if (await isCancelled(issueId)) return;
+        await updatePhase(issueId, 6, "reviewing_code_2");
+        await notify(telegramConfig,
+          `Fixing code review findings (round ${crIterations}/${MAX_CODE_REVIEW_ITERATIONS})...`
+        );
+
+        // Track HEAD before fix for convergence detection
+        let headBefore = "";
+        try {
+          headBefore = execFileSync("git", ["rev-parse", "HEAD"], {
+            cwd: worktreeDir, encoding: "utf-8",
+          }).trim();
+        } catch { /* ignore */ }
+
+        const fixResult = await runClaudePhase({
+          workdir: worktreeDir,
+          prompt: buildCodeFixPrompt(
+            repo.defaultBranch,
+            bugsResult.output,
+            securityResult.output,
+            designResult.output,
+          ),
+          systemPrompt: "You are an expert software engineer. Fix all identified issues.",
+          timeoutMs: IMPL_TIMEOUT_MS,
+        });
+
+        // Accumulate fix outputs across iterations
+        const [prevFix] = await db.select({ cr2: issues.codeReview2 }).from(issues).where(eq(issues.id, issueId));
+        const fixOutput = `# Fix Round ${crIterations}\n${fixResult.output}`;
+        const accumulatedFixes = crIterations === 1
+          ? fixOutput
+          : ((prevFix?.cr2 || "") + "\n\n========================================\n\n" + fixOutput).substring(0, MAX_FALLBACK_CHARS);
+
+        if (fixResult.sessionId) phaseSessionIds["6"] = fixResult.sessionId;
+        await db.update(issues).set({
+          codeReview2: accumulatedFixes,
+          phaseSessionIds,
+          updatedAt: new Date(),
+        }).where(eq(issues.id, issueId));
+
+        if (!fixResult.success) {
+          await failIssue(issueId, `Code fix failed: ${fixResult.output.substring(0, 2000)}`);
+          return;
+        }
+
+        // Convergence check: if fix agent made no commits, loop won't converge
+        try {
+          const headAfter = execFileSync("git", ["rev-parse", "HEAD"], {
+            cwd: worktreeDir, encoding: "utf-8",
+          }).trim();
+          if (headBefore && headBefore === headAfter) {
+            await notify(telegramConfig, `Fix agent made no changes. Stopping review loop.`);
+            break;
+          }
+        } catch { /* ignore */ }
+
+        await notify(telegramConfig, `Fixes applied. Re-reviewing...`);
+      }
+
+      if (!codeApproved) {
+        await notify(telegramConfig,
+          `Code review reached max iterations (${MAX_CODE_REVIEW_ITERATIONS}). Proceeding to PR.`
+        );
+      }
     }
 
     // ── Phase 7: PR Creation ───────────────────────────────
@@ -720,6 +1145,6 @@ export async function runIssuePipeline(
 
   } catch (err) {
     await failIssue(issueId, String(err));
-    await notify(telegramConfig, `Pipeline failed for: ${escapeHtml(issue.title)}\nError: ${String(err).substring(0, 200)}`);
+    await notify(telegramConfig, `Pipeline failed for: ${escapeHtml(issue.title)}\nError: ${escapeHtml(String(err).substring(0, 200))}`);
   }
 }

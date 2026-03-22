@@ -17,6 +17,7 @@ export const PHASE_STATUS_MAP: Record<number, IssueStatus> = {
 };
 
 export const MAX_PLAN_ITERATIONS = 3;
+export const MAX_CODE_REVIEW_ITERATIONS = 3;
 export const PHASE_TIMEOUT_MS = 15 * 60 * 1000;  // 15 min
 export const IMPL_TIMEOUT_MS = 30 * 60 * 1000;   // 30 min
 export const QA_TIMEOUT_MS = 30 * 60 * 1000;      // 30 min wait for reply
@@ -39,6 +40,7 @@ export interface PipelinePhaseResult {
   sessionId?: string;
   hasQuestions?: boolean;
   questions?: string;
+  timedOut?: boolean;
 }
 
 export interface IssuesTelegramConfig {

@@ -264,6 +264,7 @@ export const issues = sqliteTable("issues", {
   planReview2: text("plan_review_2"),
   codeReview1: text("code_review_1"),
   codeReview2: text("code_review_2"),
+  planningSessionId: text("planning_session_id"),
   worktreePath: text("worktree_path"),
   branchName: text("branch_name"),
   error: text("error"),

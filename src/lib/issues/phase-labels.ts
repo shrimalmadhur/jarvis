@@ -10,22 +10,22 @@
 export const PHASE_LABELS = [
   "Awaiting Owl",        // 0: Pending
   "Plotting",            // 1: Planning
-  "Snape's Check",       // 2: Review #1
-  "McGonagall's Check",  // 3: Review #2
+  "Veritaserum Test",    // 2: Plan Verification (2 parallel reviewers)
+  "Veritaserum Test",    // 3: (Merged into Phase 2 — same label for backward compat)
   "Casting Spell",       // 4: Implementing
-  "O.W.L. Exam",         // 5: Code Review #1
-  "N.E.W.T. Exam",       // 6: Code Review #2
-  "Mischief Managed",    // 7: Creating PR
+  "O.W.L. Tribunal",    // 5: Code Review (3 parallel specialists)
+  "Reparo!",            // 6: Code Fix (auto-fix loop)
+  "Mischief Managed",   // 7: Creating PR
 ];
 
 /** Phase definitions for the detail page pipeline bar (1-indexed phases) */
 export const PIPELINE_PHASES = [
   { phase: 1, label: "Plotting" },
-  { phase: 2, label: "Snape's Check" },
-  { phase: 3, label: "McGonagall's Check" },
+  { phase: 2, label: "Veritaserum Test" },
+  { phase: 3, label: "Veritaserum Test" },  // kept for 7-dot backward compat
   { phase: 4, label: "Casting Spell" },
-  { phase: 5, label: "O.W.L. Exam" },
-  { phase: 6, label: "N.E.W.T. Exam" },
+  { phase: 5, label: "O.W.L. Tribunal" },
+  { phase: 6, label: "Reparo!" },
   { phase: 7, label: "Mischief Managed" },
 ];
 
@@ -33,11 +33,11 @@ export const PIPELINE_PHASES = [
 export const STATUS_DISPLAY_NAMES: Record<string, string> = {
   pending: "awaiting owl",
   planning: "plotting",
-  reviewing_plan_1: "snape's check",
-  reviewing_plan_2: "mcgonagall's check",
+  reviewing_plan_1: "veritaserum test",
+  reviewing_plan_2: "veritaserum test",  // backward compat
   implementing: "casting spell",
-  reviewing_code_1: "o.w.l. exam",
-  reviewing_code_2: "n.e.w.t. exam",
+  reviewing_code_1: "o.w.l. tribunal",
+  reviewing_code_2: "reparo!",
   creating_pr: "mischief managed",
   completed: "mischief managed",
   failed: "caught by filch",

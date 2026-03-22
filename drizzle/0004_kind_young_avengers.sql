@@ -1,0 +1,1 @@
+ALTER TABLE `issues` ADD `planning_session_id` text;
