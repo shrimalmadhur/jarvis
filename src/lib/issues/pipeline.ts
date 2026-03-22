@@ -31,6 +31,11 @@ function buildClaudeEnv(): NodeJS.ProcessEnv {
   return env as unknown as NodeJS.ProcessEnv;
 }
 
+/** Build the default worktree directory path under `.claude/worktrees/`. */
+export function buildWorktreePath(repoPath: string, slug: string, shortId: string): string {
+  return join(repoPath, ".claude", "worktrees", `${slug}-${shortId}`);
+}
+
 /**
  * Run a single Claude CLI phase.
  * Prompt is piped via stdin. Uses --session-id with pre-generated UUID.
@@ -448,11 +453,11 @@ export async function runIssuePipeline(
   const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 40);
   const shortId = issue.id.substring(0, 8);
   let branchName = issue.branchName || `issue/${slug}-${shortId}`;
-  let worktreeDir = issue.worktreePath || join(repo.localRepoPath, ".dobby-worktrees", `${slug}-${shortId}`);
+  let worktreeDir = issue.worktreePath || buildWorktreePath(repo.localRepoPath, slug, shortId);
 
   // Skip worktree creation if it already exists (retry/resume scenario)
   if (!existsSync(worktreeDir)) {
-    mkdirSync(join(repo.localRepoPath, ".dobby-worktrees"), { recursive: true });
+    mkdirSync(join(repo.localRepoPath, ".claude", "worktrees"), { recursive: true });
 
     try {
       execFileSync("git", ["worktree", "add", worktreeDir, "-b", branchName, repo.defaultBranch], {
