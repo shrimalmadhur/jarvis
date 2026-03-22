@@ -12,7 +12,9 @@
     "db:studio": "drizzle-kit studio",
     "test": "bun test",
     "test:eval": "bun run --tsconfig tsconfig.runner.json scripts/eval-agent-output.ts",
-    "run-agents": "bun run --tsconfig tsconfig.runner.json scripts/run-agents.ts"
+    "run-agents": "bun run --tsconfig tsconfig.runner.json scripts/run-agents.ts",
+    "issue-poller": "bun run --tsconfig tsconfig.runner.json scripts/issue-poller.ts",
+    "issue-pipeline": "bun run --tsconfig tsconfig.runner.json scripts/issue-pipeline.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",

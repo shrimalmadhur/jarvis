@@ -1,0 +1,1 @@
+CREATE INDEX `idx_issues_status_locked` ON `issues` (`status`,`locked_by`);

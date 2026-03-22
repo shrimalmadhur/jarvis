@@ -15,7 +15,7 @@ export function maskToken(token: string): string {
   return token.substring(0, 4) + "****" + token.substring(token.length - 4);
 }
 
-interface TelegramConfig {
+export interface TelegramConfig {
   botToken: string;
   chatId: string;
 }
@@ -84,6 +84,37 @@ export async function sendTelegramMessage(
     const body = await response.text();
     console.error("Telegram API error:", response.status, body);
   }
+}
+
+/**
+ * Send a Telegram message and return the message_id from the response.
+ * Used by the issues Q&A flow to track reply_to_message_id.
+ */
+export async function sendTelegramMessageWithId(
+  config: TelegramConfig,
+  text: string
+): Promise<number> {
+  const truncated = text.length > 4096 ? text.substring(0, 4093) + "..." : text;
+  const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+
+  const response = await nodeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: config.chatId,
+      text: truncated,
+      parse_mode: "HTML",
+    }),
+    agent: ipv4Agent,
+  } as never);
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Telegram API error: ${response.status} ${body}`);
+  }
+
+  const result = await response.json() as { ok: boolean; result: { message_id: number } };
+  return result.result.message_id;
 }
 
 /**

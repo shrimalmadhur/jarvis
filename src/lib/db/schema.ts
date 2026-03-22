@@ -233,3 +233,56 @@ export const agentRunToolUses = sqliteTable("agent_run_tool_uses", {
   durationMs: integer("duration_ms"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });
+
+// ── Repositories (for issue tracking) ────────────────────────
+
+export const repositories = sqliteTable("repositories", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull().unique(),
+  githubRepoUrl: text("github_repo_url"),
+  localRepoPath: text("local_repo_path").notNull(),
+  defaultBranch: text("default_branch").notNull().default("main"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+});
+
+// ── Issues ───────────────────────────────────────────────────
+
+export const issues = sqliteTable("issues", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  repositoryId: text("repository_id").references(() => repositories.id, { onDelete: "cascade" }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("pending"),
+  currentPhase: integer("current_phase").notNull().default(0),
+  telegramMessageId: integer("telegram_message_id"),
+  telegramChatId: text("telegram_chat_id"),
+  prUrl: text("pr_url"),
+  phaseSessionIds: text("phase_session_ids", { mode: "json" }).$type<Record<string, string>>().default({}),
+  planOutput: text("plan_output"),
+  planReview1: text("plan_review_1"),
+  planReview2: text("plan_review_2"),
+  codeReview1: text("code_review_1"),
+  codeReview2: text("code_review_2"),
+  worktreePath: text("worktree_path"),
+  branchName: text("branch_name"),
+  error: text("error"),
+  lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
+  lockedBy: text("locked_by"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+  completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+}, (table) => [
+  index("idx_issues_status_locked").on(table.status, table.lockedBy),
+]);
+
+// ── Issue Messages (Q&A via Telegram) ────────────────────────
+
+export const issueMessages = sqliteTable("issue_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  issueId: text("issue_id").references(() => issues.id, { onDelete: "cascade" }).notNull(),
+  direction: text("direction").notNull(), // 'from_claude' | 'from_user'
+  message: text("message").notNull(),
+  telegramMessageId: integer("telegram_message_id"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+});

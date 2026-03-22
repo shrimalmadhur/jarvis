@@ -9,6 +9,7 @@ import {
   Plus,
   FolderKanban,
   Terminal,
+  Bug,
   Sun,
   Moon,
   Wand2,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/chat", label: "Owl Post", icon: MessageSquare },
+  { href: "/issues", label: "Issues", icon: Bug },
   { href: "/projects", label: "Houses", icon: FolderKanban },
   { href: "/sessions", label: "Pensieve", icon: Terminal },
   { href: "/settings", label: "Room of Requirement", icon: Settings },
