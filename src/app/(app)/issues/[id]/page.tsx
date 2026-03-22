@@ -14,9 +14,19 @@ import {
   ChevronDown,
   ChevronRight,
   XCircle,
+  Zap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { PIPELINE_PHASES } from "@/lib/issues/phase-labels";
+
+/**
+ * Encode a filesystem path to the ~/.claude/projects/ directory name format.
+ * Claude CLI replaces both `/` and `.` with `-`.
+ * Inlined here to avoid importing from server-only utils (which import node:path).
+ */
+function encodeProjectDir(fsPath: string): string {
+  return fsPath.replace(/[/.]/g, "-");
+}
 
 interface IssueDetail {
   id: string;
@@ -45,7 +55,74 @@ interface IssueDetail {
 
 const PHASES = PIPELINE_PHASES;
 
-function PipelineBar({ currentPhase, status }: { currentPhase: number; status: string }) {
+// ── Session link helpers ────────────────────────────────────────
+
+function buildSessionHref(sessionId: string, worktreePath: string, issueId: string): string {
+  const projectDir = encodeProjectDir(worktreePath);
+  return `/sessions/${sessionId}?project=${encodeURIComponent(projectDir)}&from=issue-${encodeURIComponent(issueId)}`;
+}
+
+function SessionLink({ sessionId, worktreePath, issueId, children, className }: {
+  sessionId: string | undefined;
+  worktreePath: string | null;
+  issueId: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  if (!sessionId || !worktreePath) return null;
+  return (
+    <Link
+      href={buildSessionHref(sessionId, worktreePath, issueId)}
+      className={className || "inline-flex items-center gap-1 text-accent hover:text-accent/80 text-[11px] font-mono transition-colors"}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** Map phaseSessionIds keys to human-readable labels for the session table. */
+const SESSION_KEY_LABELS: Record<string, string> = {
+  "1": "Plotting",
+  "2": "Adversarial Review",
+  "3": "Completeness Review",
+  "4": "Casting Spell",
+  "5a": "Bugs & Logic Review",
+  "5b": "Security Review",
+  "5c": "Design & Perf Review",
+  "6": "Reparo!",
+  "7": "Mischief Managed",
+};
+
+function getSessionKeyLabel(key: string): string {
+  // Exact match
+  if (SESSION_KEY_LABELS[key]) return SESSION_KEY_LABELS[key];
+  // Iteration-indexed: "5a.2" → base "5a" + " (Round 2)"
+  const match = key.match(/^(.+?)\.(\d+)$/);
+  if (match) {
+    const base = match[1];
+    const round = match[2];
+    const baseLabel = SESSION_KEY_LABELS[base] || `Phase ${base}`;
+    return `${baseLabel} (Round ${round})`;
+  }
+  return `Phase ${key}`;
+}
+
+/** Check if a bare key (e.g., "5" or "6") is a resume pointer that should be hidden when sub-keys exist. */
+function isResumePointer(key: string, allKeys: string[]): boolean {
+  if (key === "5") return allKeys.some(k => /^5[abc]/.test(k));
+  if (key === "6") return allKeys.some(k => /^6\./.test(k));
+  return false;
+}
+
+// ── Components ──────────────────────────────────────────────────
+
+function PipelineBar({ currentPhase, status, phaseSessionIds, worktreePath, issueId }: {
+  currentPhase: number;
+  status: string;
+  phaseSessionIds: Record<string, string>;
+  worktreePath: string | null;
+  issueId: string;
+}) {
   const isFailed = status === "failed";
   const isCompleted = status === "completed";
   const isWaiting = status === "waiting_for_input";
@@ -78,14 +155,31 @@ function PipelineBar({ currentPhase, status }: { currentPhase: number; status: s
           }
         }
 
+        const sessionId = phaseSessionIds[String(phase)];
+        const hasLink = sessionId && worktreePath;
+
+        const dotContent = (
+          <div className="flex flex-col items-center gap-1">
+            <div className={`h-3 w-3 rounded-full ${dotColor}`} />
+            <span className={`text-[10px] font-mono ${labelColor} whitespace-nowrap ${hasLink ? "underline decoration-dotted underline-offset-2" : ""}`}>
+              {label}
+            </span>
+          </div>
+        );
+
         return (
           <div key={phase} className="flex items-center">
-            <div className="flex flex-col items-center gap-1">
-              <div className={`h-3 w-3 rounded-full ${dotColor}`} />
-              <span className={`text-[10px] font-mono ${labelColor} whitespace-nowrap`}>
-                {label}
-              </span>
-            </div>
+            {hasLink ? (
+              <Link
+                href={buildSessionHref(sessionId, worktreePath, issueId)}
+                className="hover:opacity-80 transition-opacity cursor-pointer"
+                title={`View ${label} session`}
+              >
+                {dotContent}
+              </Link>
+            ) : (
+              dotContent
+            )}
             {idx < PHASES.length - 1 && (
               <div className={`h-0.5 w-8 ${lineColor} -mt-4`} />
             )}
@@ -96,21 +190,38 @@ function PipelineBar({ currentPhase, status }: { currentPhase: number; status: s
   );
 }
 
-function CollapsibleSection({ title, content, defaultOpen }: { title: string; content: string | null; defaultOpen?: boolean }) {
+function CollapsibleSection({ title, content, defaultOpen, sessionHref }: {
+  title: string;
+  content: string | null;
+  defaultOpen?: boolean;
+  sessionHref?: string;
+}) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   if (!content) return null;
 
   return (
     <div className="term-card overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 p-3 text-left hover:bg-surface-hover transition-colors"
-      >
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-        <span className="text-[13px] font-mono font-bold text-foreground uppercase tracking-wider">
-          {title}
-        </span>
-      </button>
+      <div className="flex items-center">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex-1 flex items-center gap-2 p-3 text-left hover:bg-surface-hover transition-colors"
+        >
+          {open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+          <span className="text-[13px] font-mono font-bold text-foreground uppercase tracking-wider">
+            {title}
+          </span>
+        </button>
+        {sessionHref && (
+          <Link
+            href={sessionHref}
+            className="flex items-center gap-1 px-3 py-1 mr-2 text-[11px] font-mono text-accent hover:text-accent/80 transition-colors"
+            title="View Claude session"
+          >
+            <Zap className="h-3 w-3" />
+            session
+          </Link>
+        )}
+      </div>
       {open && (
         <div className="px-4 pb-4 prose prose-invert prose-sm max-w-none text-[14px] font-mono text-muted-foreground">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
@@ -233,6 +344,34 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     ? `cd ${issue.worktreePath || issue.localRepoPath} && claude --resume ${latestSessionId}`
     : null;
 
+  // Build session hrefs for phase output sections (only when worktreePath exists)
+  const sessionHrefFor = (phaseKey: string): string | undefined => {
+    const sid = sessionIds[phaseKey];
+    if (!sid || !issue.worktreePath) return undefined;
+    return buildSessionHref(sid, issue.worktreePath, issue.id);
+  };
+
+  // Phase output sections — data-driven mapping from PIPELINE_PHASES
+  const phaseOutputSections: { title: string; content: string | null; phaseKey: string; defaultOpen?: boolean }[] = [
+    { title: "The Plot", content: issue.planOutput, phaseKey: "1", defaultOpen: issue.currentPhase <= 3 },
+    { title: "Adversarial Review", content: issue.planReview1, phaseKey: "2" },
+    { title: "Completeness Review", content: issue.planReview2, phaseKey: "3" },
+    { title: "Code Review (3 Specialists)", content: issue.codeReview1, phaseKey: "5" },
+    { title: "Code Fixes", content: issue.codeReview2, phaseKey: "6" },
+  ];
+
+  // Session table entries — filter out bare resume pointers when sub-keys exist
+  const allSessionKeys = Object.keys(sessionIds);
+  const displaySessionEntries = allSessionKeys
+    .filter(key => !isResumePointer(key, allSessionKeys))
+    .sort((a, b) => {
+      // Sort by numeric phase, then alphabetically within phase
+      const numA = parseFloat(a.replace(/[abc]/g, ""));
+      const numB = parseFloat(b.replace(/[abc]/g, ""));
+      if (numA !== numB) return numA - numB;
+      return a.localeCompare(b);
+    });
+
   return (
     <div className="flex-1 overflow-y-auto">
       {/* Header */}
@@ -264,6 +403,15 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Phase 7 session link — next to PR button */}
+                {sessionIds["7"] && issue.worktreePath && (
+                  <SessionLink sessionId={sessionIds["7"]} worktreePath={issue.worktreePath} issueId={issue.id}
+                    className="flex items-center gap-1.5 border border-accent/30 bg-accent/5 px-3 py-1.5 text-[13px] font-mono text-accent hover:bg-accent/10 transition-all"
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    PR session
+                  </SessionLink>
+                )}
                 {issue.prUrl && (
                   <a
                     href={issue.prUrl}
@@ -315,23 +463,51 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
-        {/* Pipeline progress */}
+        {/* Pipeline progress — dots are clickable when sessions exist */}
         <section className="term-card p-5">
           <div className="text-[12px] font-mono text-muted uppercase tracking-wider mb-4">
             spell progress
           </div>
-          <PipelineBar currentPhase={issue.currentPhase} status={issue.status} />
+          <PipelineBar
+            currentPhase={issue.currentPhase}
+            status={issue.status}
+            phaseSessionIds={sessionIds}
+            worktreePath={issue.worktreePath}
+            issueId={issue.id}
+          />
         </section>
 
         {/* Description */}
         <CollapsibleSection title="Quest Description" content={issue.description} defaultOpen />
 
-        {/* Phase outputs */}
-        <CollapsibleSection title="The Plot" content={issue.planOutput} defaultOpen={issue.currentPhase <= 3} />
-        <CollapsibleSection title="Adversarial Review" content={issue.planReview1} />
-        <CollapsibleSection title="Completeness Review" content={issue.planReview2} />
-        <CollapsibleSection title="Code Review (3 Specialists)" content={issue.codeReview1} />
-        <CollapsibleSection title="Code Fixes" content={issue.codeReview2} />
+        {/* Phase outputs — each with session link when available */}
+        {phaseOutputSections.map(({ title, content, phaseKey, defaultOpen }) => (
+          <CollapsibleSection
+            key={phaseKey}
+            title={title}
+            content={content}
+            defaultOpen={defaultOpen}
+            sessionHref={sessionHrefFor(phaseKey)}
+          />
+        ))}
+
+        {/* Phase 4 (Implementation) session link */}
+        {sessionIds["4"] && issue.worktreePath && (
+          <section className="space-y-2">
+            <h2 className="text-[13px] font-mono font-bold text-accent uppercase tracking-widest">
+              &gt; Implementation Session
+            </h2>
+            <div className="term-card p-3">
+              <SessionLink sessionId={sessionIds["4"]} worktreePath={issue.worktreePath} issueId={issue.id}
+                className="flex items-center gap-1.5 text-[13px] font-mono text-accent hover:text-accent/80 transition-colors"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                View Casting Spell session
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </SessionLink>
+            </div>
+          </section>
+        )}
 
         {/* Q&A Thread */}
         {issue.messages.length > 0 && (
@@ -407,22 +583,37 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
           </section>
         )}
 
-        {/* Session IDs */}
-        {Object.keys(sessionIds).length > 0 && (
+        {/* Session IDs — phase-linked table with labels */}
+        {displaySessionEntries.length > 0 && (
           <section className="space-y-2">
             <h2 className="text-[13px] font-mono font-bold text-accent uppercase tracking-widest">
               &gt; Session IDs
             </h2>
             <div className="term-card p-3 space-y-1">
-              {Object.entries(sessionIds).map(([phase, sid]) => (
-                <div key={phase} className="flex items-center justify-between text-[12px] font-mono">
-                  <span className="text-muted">Phase {phase}:</span>
-                  <div className="flex items-center gap-2">
-                    <code className="text-muted-foreground">{sid.substring(0, 12)}...</code>
-                    <CopyButton text={sid} />
+              {displaySessionEntries.map((key) => {
+                const sid = sessionIds[key];
+                const label = getSessionKeyLabel(key);
+                const hasLink = issue.worktreePath && sid;
+
+                return (
+                  <div key={key} className="flex items-center justify-between text-[12px] font-mono">
+                    <span className="text-muted">{label}:</span>
+                    <div className="flex items-center gap-2">
+                      {hasLink ? (
+                        <Link
+                          href={buildSessionHref(sid, issue.worktreePath!, issue.id)}
+                          className="text-accent hover:text-accent/80 transition-colors underline decoration-dotted underline-offset-2"
+                        >
+                          {sid.substring(0, 12)}...
+                        </Link>
+                      ) : (
+                        <code className="text-muted-foreground">{sid.substring(0, 12)}...</code>
+                      )}
+                      <CopyButton text={sid} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

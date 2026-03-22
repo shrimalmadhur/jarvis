@@ -39,9 +39,19 @@ export function extractProjectName(cwdPath: string): {
 
 /**
  * Decode a URL-safe project directory name back to its filesystem path.
+ * Note: this is lossy — both `/` and `.` are encoded as `-`, so round-tripping is not possible.
  */
 export function decodeProjectDir(dirName: string): string {
   return dirName.replace(/^-/, "/").replace(/-/g, "/");
+}
+
+/**
+ * Encode a filesystem path to the ~/.claude/projects/ directory name format.
+ * Claude CLI replaces both `/` and `.` with `-`.
+ * Example: `/home/user/repo/.claude/worktrees/slug` → `-home-user-repo--claude-worktrees-slug`
+ */
+export function encodeProjectDir(fsPath: string): string {
+  return fsPath.replace(/[/.]/g, "-");
 }
 
 /**

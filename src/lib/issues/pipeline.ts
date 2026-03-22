@@ -851,6 +851,9 @@ export async function runIssuePipeline(
             return;
           }
 
+          // Store iteration-indexed session IDs (keep "1" pointing to latest for CLI resume)
+          const planIterKey = planIterations > 0 ? `.${planIterations + 1}` : "";
+          if (planResult.sessionId) phaseSessionIds[`1${planIterKey}`] = planResult.sessionId;
           phaseSessionIds["1"] = planResult.sessionId!;
           planOutput = planResult.output;
           await db.update(issues).set({
@@ -898,6 +901,10 @@ export async function runIssuePipeline(
         const review1Result = settledResult(planReviewResults[0]);
         const review2Result = settledResult(planReviewResults[1]);
 
+        // Store iteration-indexed review session IDs (keep "2"/"3" pointing to latest for CLI resume)
+        const reviewIterKey = planIterations > 1 ? `.${planIterations}` : "";
+        if (review1Result.sessionId) phaseSessionIds[`2${reviewIterKey}`] = review1Result.sessionId;
+        if (review2Result.sessionId) phaseSessionIds[`3${reviewIterKey}`] = review2Result.sessionId;
         if (review1Result.sessionId) phaseSessionIds["2"] = review1Result.sessionId;
         if (review2Result.sessionId) phaseSessionIds["3"] = review2Result.sessionId;
         await db.update(issues).set({
@@ -1121,6 +1128,12 @@ export async function runIssuePipeline(
           ? roundReview
           : ((prevIssue?.cr1 || "") + "\n\n========================================\n\n" + roundReview).substring(0, MAX_FALLBACK_CHARS);
 
+        // Store all 3 reviewer session IDs with iteration indexing
+        const crIterKey = crIterations > 1 ? `.${crIterations}` : "";
+        if (bugsResult.sessionId) phaseSessionIds[`5a${crIterKey}`] = bugsResult.sessionId;
+        if (securityResult.sessionId) phaseSessionIds[`5b${crIterKey}`] = securityResult.sessionId;
+        if (designResult.sessionId) phaseSessionIds[`5c${crIterKey}`] = designResult.sessionId;
+        // Keep "5" pointing to latest for CLI resume
         if (bugsResult.sessionId) phaseSessionIds["5"] = bugsResult.sessionId;
         await db.update(issues).set({
           codeReview1: accumulatedReview,
@@ -1175,6 +1188,10 @@ export async function runIssuePipeline(
           ? fixOutput
           : ((prevFix?.cr2 || "") + "\n\n========================================\n\n" + fixOutput).substring(0, MAX_FALLBACK_CHARS);
 
+        // Store iteration-indexed fix session IDs
+        const fixIterKey = crIterations > 1 ? `.${crIterations}` : "";
+        if (fixResult.sessionId) phaseSessionIds[`6${fixIterKey}`] = fixResult.sessionId;
+        // Keep "6" pointing to latest for CLI resume
         if (fixResult.sessionId) phaseSessionIds["6"] = fixResult.sessionId;
         await db.update(issues).set({
           codeReview2: accumulatedFixes,

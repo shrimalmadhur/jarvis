@@ -184,11 +184,13 @@ function SubAgentCard({
   agent,
   sessionId,
   projectDir,
+  from,
   index,
 }: {
   agent: SubAgentInfo;
   sessionId: string;
   projectDir: string;
+  from?: string;
   index: number;
 }) {
   const total =
@@ -196,7 +198,7 @@ function SubAgentCard({
     agent.tokenUsage.outputTokens +
     agent.tokenUsage.cacheReadTokens +
     agent.tokenUsage.cacheCreationTokens;
-  const href = `/sessions/${sessionId}?project=${encodeURIComponent(projectDir)}&subagent=${agent.agentId}`;
+  const href = `/sessions/${sessionId}?project=${encodeURIComponent(projectDir)}&subagent=${agent.agentId}${from ? `&from=${encodeURIComponent(from)}` : ""}`;
 
   return (
     <Link href={href}>
@@ -327,13 +329,30 @@ export default function SessionDetailPage() {
   const projectDir = searchParams.get("project");
   const subagentId = searchParams.get("subagent");
 
+  const from = searchParams.get("from");
+
   const [data, setData] = useState<SessionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Determine back-navigation target
+  const fromParam = from ? `&from=${encodeURIComponent(from)}` : "";
   const parentHref = projectDir
-    ? `/sessions/${params.id}?project=${encodeURIComponent(projectDir)}`
+    ? `/sessions/${params.id}?project=${encodeURIComponent(projectDir)}${fromParam}`
     : "/sessions";
+
+  const isFromIssue = from?.startsWith("issue-");
+  const issueBackHref = isFromIssue ? `/issues/${from!.replace("issue-", "")}` : null;
+  const backHref = issueBackHref && !subagentId
+    ? issueBackHref
+    : subagentId
+      ? parentHref
+      : issueBackHref || "/sessions";
+  const backLabel = issueBackHref && !subagentId
+    ? "Back to Issue"
+    : subagentId
+      ? "Back to Parent Session"
+      : issueBackHref ? "Back to Issue" : "Back to Sessions";
 
   useEffect(() => {
     if (!projectDir) {
@@ -387,14 +406,16 @@ export default function SessionDetailPage() {
           <AlertCircle className="h-5 w-5 text-muted" />
         </div>
         <p className="text-sm text-muted-foreground">
-          {error || "Session not found"}
+          {isFromIssue && error === "Session not found"
+            ? "This session is no longer available (session files may have been cleaned up)"
+            : error || "Session not found"}
         </p>
         <Link
-          href="/sessions"
+          href={backHref}
           className="inline-flex items-center gap-1.5 text-sm text-accent transition-colors hover:text-accent-dim"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to Sessions
+          {backLabel}
         </Link>
       </div>
     );
@@ -413,11 +434,11 @@ export default function SessionDetailPage() {
         {/* Back link + header */}
         <div className="animate-fade-in space-y-4">
           <Link
-            href={subagentId ? parentHref : "/sessions"}
+            href={subagentId ? parentHref : backHref}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground group"
           >
             <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-            {subagentId ? "Back to Parent Session" : "Back to Sessions"}
+            {subagentId ? "Back to Parent Session" : backLabel}
           </Link>
 
           <div className="space-y-3">
@@ -523,6 +544,7 @@ export default function SessionDetailPage() {
                     agent={agent}
                     sessionId={params.id}
                     projectDir={projectDir!}
+                    from={from || undefined}
                     index={idx}
                   />
                 ))}
