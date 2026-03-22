@@ -451,12 +451,20 @@ End with either:
 - "## Questions" section if you need clarification`;
 }
 
-function buildAdversarialReviewPrompt(plan: string): string {
+function buildAdversarialReviewPrompt(plan: string, priorFindings?: string): string {
+  const priorSection = priorFindings ? `
+## Prior Review Findings (from previous rounds)
+The following CRITICAL issues were found in earlier review rounds. You MUST verify that EACH of these has been addressed in the current plan. If any remain unaddressed, re-list them as CRITICAL.
+
+${priorFindings}
+
+` : "";
+
   return `You are an adversarial plan reviewer. Your job is to find problems, not validate.
 
 ## Plan to Review
 ${plan}
-
+${priorSection}
 ## Instructions
 Review this plan for:
 1. Security vulnerabilities
@@ -465,6 +473,7 @@ Review this plan for:
 4. Incorrect assumptions about the codebase
 5. Missing steps or dependencies
 6. Breaking changes
+${priorFindings ? "7. Verify ALL prior findings listed above have been addressed" : ""}
 
 For each issue found, classify as:
 - CRITICAL: Must be fixed before implementation
@@ -478,12 +487,20 @@ End with:
 - "VERDICT: FAIL" if CRITICAL issues exist`;
 }
 
-function buildCompletenessReviewPrompt(plan: string): string {
+function buildCompletenessReviewPrompt(plan: string, priorFindings?: string): string {
+  const priorSection = priorFindings ? `
+## Prior Review Findings (from previous rounds)
+The following issues were found in earlier review rounds. You MUST verify that EACH of these has been addressed in the current plan. If any remain unaddressed, re-list them as blocking gaps.
+
+${priorFindings}
+
+` : "";
+
   return `You are a completeness and feasibility reviewer.
 
 ## Plan
 ${plan}
-
+${priorSection}
 ## Instructions
 Check the plan for:
 1. Missing implementation steps
@@ -491,6 +508,7 @@ Check the plan for:
 3. Missing test coverage
 4. Integration gaps
 5. Deployment or migration concerns
+${priorFindings ? "6. Verify ALL prior findings listed above have been addressed" : ""}
 
 For each gap found, classify as:
 - MISSING_STEP: A required step is not in the plan
@@ -504,7 +522,14 @@ End with:
 - "VERDICT: FAIL" if there are blocking gaps`;
 }
 
-function buildPlanFixPrompt(plan: string, adversarialReview: string, completenessReview: string): string {
+function buildPlanFixPrompt(plan: string, adversarialReview: string, completenessReview: string, priorFindings?: string): string {
+  const priorSection = priorFindings ? `
+## Previously Identified Issues (from earlier rounds)
+These issues were found in earlier review rounds. Ensure they are ALSO addressed in your revision, not just the latest findings.
+
+${priorFindings}
+` : "";
+
   return `You are an expert plan fixer. Your job is to surgically revise an implementation plan to address ALL findings from two independent reviewers.
 
 ## Current Plan
@@ -515,19 +540,18 @@ ${adversarialReview}
 
 ## Completeness Review Findings
 ${completenessReview}
-
+${priorSection}
 ## Instructions
 1. Read EVERY finding from both reviewers — CRITICAL, WARNING, and NOTE severity
-2. For each finding, make the MINIMUM change to the plan that fully addresses it
+2. For each finding, make a concrete change to the plan that fully addresses it
 3. Do NOT rewrite the plan from scratch — preserve all parts that were not flagged
 4. If a finding suggests a specific fix, incorporate it directly
 5. If two findings conflict, prefer the safer/more correct approach
 6. Ensure the revised plan is still coherent and self-consistent after all fixes
+${priorFindings ? "7. Also verify that ALL previously identified issues (listed above) remain addressed" : ""}
 
 ## Output Format
-Output the COMPLETE revised plan (not just the diffs). The output must be a standalone, clean plan that can be handed directly to an implementer. Do NOT include a changelog or summary of what was changed — just output the revised plan.
-
-End with "VERDICT: READY" to indicate the revised plan is complete.`;
+Output the COMPLETE revised plan (not just the diffs). The output must be a standalone, clean plan that can be handed directly to an implementer. Do NOT include a changelog, commentary, or summary of what was changed — just output the revised plan text and nothing else.`;
 }
 
 function buildImplementationPrompt(plan: string, review1: string, review2: string): string {
@@ -795,6 +819,7 @@ export async function runIssuePipeline(
       let planIterations = 0;
       let planApproved = false;
       let skipPlanning = false; // Set after plan-fix to go directly to re-review
+      const priorPlanFindings: string[] = []; // Accumulated findings from previous review rounds
 
       while (!planApproved && planIterations < MAX_PLAN_ITERATIONS) {
         if (!skipPlanning) {
@@ -884,16 +909,21 @@ export async function runIssuePipeline(
         await updatePhase(issueId, 2, "reviewing_plan_1");
         await notify(telegramConfig, `Plan verification started (2 reviewers in parallel)`);
 
+        const priorFindingsText = priorPlanFindings.length > 0
+          ? priorPlanFindings.join("\n\n========================================\n\n")
+              .substring(0, MAX_FALLBACK_CHARS)
+          : undefined;
+
         const planReviewResults = await Promise.allSettled([
           runClaudePhase({
             workdir: worktreeDir,
-            prompt: buildAdversarialReviewPrompt(planOutput),
+            prompt: buildAdversarialReviewPrompt(planOutput, priorFindingsText),
             systemPrompt: "You are an adversarial plan reviewer. Find problems, not validate.",
             timeoutMs: PHASE_TIMEOUT_MS,
           }),
           runClaudePhase({
             workdir: worktreeDir,
-            prompt: buildCompletenessReviewPrompt(planOutput),
+            prompt: buildCompletenessReviewPrompt(planOutput, priorFindingsText),
             systemPrompt: "You are a completeness and feasibility reviewer. Find gaps.",
             timeoutMs: PHASE_TIMEOUT_MS,
           }),
@@ -907,9 +937,32 @@ export async function runIssuePipeline(
         if (review2Result.sessionId) phaseSessionIds[`3${reviewIterKey}`] = review2Result.sessionId;
         if (review1Result.sessionId) phaseSessionIds["2"] = review1Result.sessionId;
         if (review2Result.sessionId) phaseSessionIds["3"] = review2Result.sessionId;
+        // Accumulate reviews across iterations (prefix with round number for context)
+        const roundReview1 = planIterations > 1
+          ? `# Plan Review Round ${planIterations} - Adversarial\n${review1Result.output}`
+          : review1Result.output;
+        const roundReview2 = planIterations > 1
+          ? `# Plan Review Round ${planIterations} - Completeness\n${review2Result.output}`
+          : review2Result.output;
+
+        const [prevIssue] = await db.select({
+          pr1: issues.planReview1,
+          pr2: issues.planReview2,
+        }).from(issues).where(eq(issues.id, issueId));
+
+        // Newest round first so truncation drops stale rounds, not the latest
+        const accumulatedReview1 = planIterations === 1
+          ? roundReview1
+          : (roundReview1 + "\n\n========================================\n\n" + (prevIssue?.pr1 || ""))
+              .substring(0, MAX_FALLBACK_CHARS);
+        const accumulatedReview2 = planIterations === 1
+          ? roundReview2
+          : (roundReview2 + "\n\n========================================\n\n" + (prevIssue?.pr2 || ""))
+              .substring(0, MAX_FALLBACK_CHARS);
+
         await db.update(issues).set({
-          planReview1: review1Result.output,
-          planReview2: review2Result.output,
+          planReview1: accumulatedReview1,
+          planReview2: accumulatedReview2,
           phaseSessionIds,
           updatedAt: new Date(),
         }).where(eq(issues.id, issueId));
@@ -919,6 +972,13 @@ export async function runIssuePipeline(
         const review2Failed = /VERDICT:\s*FAIL/i.test(review2Result.output);
 
         if (review1Failed || review2Failed) {
+          // Accumulate findings for subsequent review rounds
+          const roundFindings = [
+            review1Failed ? `### Round ${planIterations} - Adversarial Review CRITICALs\n${review1Result.output}` : "",
+            review2Failed ? `### Round ${planIterations} - Completeness Review CRITICALs\n${review2Result.output}` : "",
+          ].filter(Boolean).join("\n\n");
+          priorPlanFindings.push(roundFindings);
+
           if (planIterations >= MAX_PLAN_ITERATIONS) break;
           if (await isCancelled(issueId)) return;
 
@@ -927,71 +987,50 @@ export async function runIssuePipeline(
             `Plan review round ${planIterations} failed. Fixing plan before attempt ${planIterations + 1}...`
           );
 
-          const capPerInput = Math.floor(MAX_FALLBACK_CHARS / 3) - 500;
+          const priorFindingsForFix = priorPlanFindings.length > 1
+            ? priorPlanFindings.slice(0, -1).join("\n\n")
+            : undefined;
+          const capPerInput = Math.floor(MAX_FALLBACK_CHARS / (priorFindingsForFix ? 4 : 3)) - 500;
           const fixPrompt = buildPlanFixPrompt(
             planOutput.substring(0, capPerInput),
             review1Result.output.substring(0, capPerInput),
             review2Result.output.substring(0, capPerInput),
+            priorFindingsForFix?.substring(0, capPerInput),
           );
-          let fixResult: PipelinePhaseResult;
 
-          if (resumeSupported && planningSessionId) {
-            // Resume the planning session with fix instructions (preserves exploration context)
-            fixResult = await runClaudePhase({
-              workdir: worktreeDir,
-              prompt: fixPrompt,
-              timeoutMs: PHASE_TIMEOUT_MS,
-              resumeSessionId: planningSessionId,
-            });
+          // Always use a fresh session for fixes — resumed sessions respond
+          // conversationally and fail to produce structured plan output
+          const fixResult = await runClaudePhase({
+            workdir: worktreeDir,
+            prompt: fixPrompt,
+            systemPrompt: "You are an expert plan fixer. Surgically revise the plan to address all review findings. Output ONLY the complete revised plan text with no commentary.",
+            timeoutMs: PHASE_TIMEOUT_MS,
+          });
 
-            // Fallback to fresh session if resume fails
-            if (!fixResult.success && !fixResult.timedOut) {
-              console.log("[pipeline] Plan fix resume failed, falling back to fresh session");
-              fixResult = await runClaudePhase({
-                workdir: worktreeDir,
-                prompt: fixPrompt,
-                systemPrompt: "You are an expert plan fixer. Surgically revise the plan to address all review findings.",
-                timeoutMs: PHASE_TIMEOUT_MS,
-              });
-              // Keep planningSessionId in sync so subsequent resumes don't hit a stale session
-              if (fixResult.sessionId) {
-                planningSessionId = fixResult.sessionId;
-                await db.update(issues).set({ planningSessionId, updatedAt: new Date() })
-                  .where(eq(issues.id, issueId));
-              }
-            }
-          } else {
-            fixResult = await runClaudePhase({
-              workdir: worktreeDir,
-              prompt: fixPrompt,
-              systemPrompt: "You are an expert plan fixer. Surgically revise the plan to address all review findings.",
-              timeoutMs: PHASE_TIMEOUT_MS,
-            });
-            if (fixResult.sessionId) {
-              planningSessionId = fixResult.sessionId;
-              await db.update(issues).set({ planningSessionId, updatedAt: new Date() })
-                .where(eq(issues.id, issueId));
-            }
+          // Store fix session ID for debugging
+          if (fixResult.sessionId) {
+            phaseSessionIds[`fix.${planIterations}`] = fixResult.sessionId;
+            await db.update(issues).set({ phaseSessionIds, updatedAt: new Date() })
+              .where(eq(issues.id, issueId));
           }
+          console.log(`[pipeline] Plan fix iteration ${planIterations} (session ${fixResult.sessionId}): success=${fixResult.success}, output=${fixResult.output.length} chars`);
 
           if (fixResult.success && fixResult.output.trim()) {
-            // Only accept if the fix agent signals completion; strip verdict marker
-            if (/VERDICT:\s*READY/i.test(fixResult.output)) {
-              planOutput = fixResult.output
-                .replace(/\n*VERDICT:\s*READY[^\n]*/gi, "")
-                .trim();
-              await db.update(issues).set({
-                planOutput,
-                updatedAt: new Date(),
-              }).where(eq(issues.id, issueId));
-            } else {
-              console.warn("[pipeline] Plan fix did not include VERDICT: READY, keeping original plan");
-            }
+            // Accept the fix output as the new plan — the next review round is the quality gate
+            planOutput = fixResult.output
+              .replace(/\n*VERDICT:\s*(READY|PASS|FAIL)[^\n]*/gi, "")
+              .trim();
+            await db.update(issues).set({
+              planOutput,
+              updatedAt: new Date(),
+            }).where(eq(issues.id, issueId));
+            console.log(`[pipeline] Plan updated from fix (iteration ${planIterations}), ${planOutput.length} chars`);
+            skipPlanning = true; // Skip planning, go straight to re-review
           } else {
-            console.warn(`[pipeline] Plan fix failed (success=${fixResult.success}). Retrying with original plan.`);
+            console.warn(`[pipeline] Plan fix failed (success=${fixResult.success}). Falling back to re-planning.`);
+            // Don't set skipPlanning — let the next iteration re-run planning with review feedback
           }
 
-          skipPlanning = true;
           continue;
         }
 

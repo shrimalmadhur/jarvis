@@ -16,7 +16,7 @@ export const PHASE_STATUS_MAP: Record<number, IssueStatus> = {
   7: "creating_pr",
 };
 
-export const MAX_PLAN_ITERATIONS = 3;
+export const MAX_PLAN_ITERATIONS = 5;
 export const MAX_CODE_REVIEW_ITERATIONS = 3;
 export const PHASE_TIMEOUT_MS = 15 * 60 * 1000;  // 15 min
 export const IMPL_TIMEOUT_MS = 30 * 60 * 1000;   // 30 min
