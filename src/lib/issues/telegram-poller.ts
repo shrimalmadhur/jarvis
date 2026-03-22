@@ -2,7 +2,7 @@ import nodeFetch from "node-fetch";
 import https from "node:https";
 import { db } from "@/lib/db";
 import { repositories, issues, issueMessages, notificationConfigs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
 import { PHASE_STATUS_MAP } from "./types";
 import type { TelegramUpdate, IssuesTelegramConfig } from "./types";
@@ -131,11 +131,11 @@ export async function processTelegramUpdate(
   const parsed = parseIssueMessage(msg.text);
   if (!parsed) return;
 
-  // Look up repository
+  // Look up repository (case-insensitive)
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(eq(repositories.name, parsed.repoName))
+    .where(sql`lower(${repositories.name}) = lower(${parsed.repoName})`)
     .limit(1);
 
   if (!repo) {
