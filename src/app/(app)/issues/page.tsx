@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Plus,
   Trash2,
+  Archive,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { PHASE_LABELS, STATUS_DISPLAY_NAMES } from "@/lib/issues/phase-labels";
@@ -26,6 +27,7 @@ interface Issue {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  archivedAt: string | null;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot?: string }> = {
@@ -42,7 +44,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; dot?: string }> 
   waiting_for_input: { bg: "bg-amber-500/10", text: "text-amber-400", dot: "bg-amber-400 animate-pulse" },
 };
 
-type FilterTab = "all" | "active" | "completed" | "failed";
+type FilterTab = "all" | "active" | "completed" | "failed" | "archived";
 
 function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] || STATUS_STYLES.pending;
@@ -84,8 +86,9 @@ function PipelineProgress({ currentPhase, status }: { currentPhase: number; stat
   );
 }
 
-function IssueCard({ issue, index }: { issue: Issue; index: number }) {
+function IssueCard({ issue, index, onArchive }: { issue: Issue; index: number; onArchive?: (id: string) => void }) {
   const created = formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true });
+  const canArchive = onArchive && (issue.status === "completed" || issue.status === "failed");
 
   return (
     <Link href={`/issues/${issue.id}`} className="block group">
@@ -148,9 +151,21 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
                 {issue.id.substring(0, 8)}
               </span>
             )}
-            <span className="flex items-center gap-1 text-[13px] text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
-              details <ArrowRight className="h-3 w-3" />
-            </span>
+            <div className="flex items-center gap-2">
+              {canArchive && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchive(issue.id); }}
+                  className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-accent transition-colors opacity-0 group-hover:opacity-100"
+                  title="Archive"
+                >
+                  <Archive className="h-3 w-3" />
+                  archive
+                </button>
+              )}
+              <span className="flex items-center gap-1 text-[13px] text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
+                details <ArrowRight className="h-3 w-3" />
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -160,15 +175,25 @@ function IssueCard({ issue, index }: { issue: Issue; index: number }) {
 
 export default function IssuesPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [archivedIssues, setArchivedIssues] = useState<Issue[]>([]);
+  const [archivedCount, setArchivedCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [cleanAllState, setCleanAllState] = useState<"idle" | "confirming" | "cleaning">("idle");
+  const [archiveAllState, setArchiveAllState] = useState<"idle" | "confirming" | "archiving">("idle");
   const [cleanResult, setCleanResult] = useState<string | null>(null);
+  const [archiveResult, setArchiveResult] = useState<string | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const archiveConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const worktreeCount = issues.filter(
     (i) => i.hasWorktree && (i.status === "completed" || i.status === "failed")
+  ).length;
+
+  const archivableCount = issues.filter(
+    (i) => i.status === "completed" || i.status === "failed"
   ).length;
 
   const fetchIssues = useCallback(async () => {
@@ -186,6 +211,42 @@ export default function IssuesPage() {
       setLoading(false);
     }
   }, []);
+
+  const fetchArchivedCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/issues?archived=true&countOnly=true");
+      if (res.ok) {
+        const data = await res.json();
+        setArchivedCount(data.count);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchArchivedIssues = useCallback(async () => {
+    setArchivedLoading(true);
+    try {
+      const res = await fetch("/api/issues?archived=true");
+      if (res.ok) {
+        const data = await res.json();
+        setArchivedIssues(data.issues);
+      }
+    } catch { /* ignore */ } finally {
+      setArchivedLoading(false);
+    }
+  }, []);
+
+  const handleArchiveOne = useCallback(async (issueId: string) => {
+    try {
+      const res = await fetch(`/api/issues/${issueId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: true }),
+      });
+      if (res.ok) {
+        await Promise.all([fetchIssues(), fetchArchivedCount()]);
+      }
+    } catch { /* ignore */ }
+  }, [fetchIssues, fetchArchivedCount]);
 
   const handleCleanAll = useCallback(async () => {
     if (cleanAllState === "idle") {
@@ -216,9 +277,43 @@ export default function IssuesPage() {
     }
   }, [cleanAllState, fetchIssues]);
 
-  useEffect(() => { fetchIssues(); }, [fetchIssues]);
+  const handleArchiveAll = useCallback(async () => {
+    if (archiveAllState === "idle") {
+      setArchiveAllState("confirming");
+      archiveConfirmTimer.current = setTimeout(() => setArchiveAllState("idle"), 3000);
+      return;
+    }
+    if (archiveAllState === "confirming") {
+      if (archiveConfirmTimer.current) clearTimeout(archiveConfirmTimer.current);
+      setArchiveAllState("archiving");
+      try {
+        const res = await fetch("/api/issues/archive", { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          setArchiveResult(`archived ${data.archived} quests`);
+          setTimeout(() => setArchiveResult(null), 3000);
+        }
+      } catch {
+        setArchiveResult("archive failed");
+        setTimeout(() => setArchiveResult(null), 3000);
+      } finally {
+        setArchiveAllState("idle");
+        await Promise.all([fetchIssues(), fetchArchivedCount()]);
+      }
+    }
+  }, [archiveAllState, fetchIssues, fetchArchivedCount]);
 
-  // Auto-refresh while any issue is in progress
+  // Initial load: fetch issues + archived count
+  useEffect(() => { fetchIssues(); fetchArchivedCount(); }, [fetchIssues, fetchArchivedCount]);
+
+  // Fetch archived issues when switching to the archived tab
+  useEffect(() => {
+    if (filter === "archived") {
+      fetchArchivedIssues();
+    }
+  }, [filter, fetchArchivedIssues]);
+
+  // Auto-refresh while any issue is in progress (non-archived only)
   useEffect(() => {
     const hasActive = issues.some((i) =>
       !["pending", "completed", "failed"].includes(i.status)
@@ -229,8 +324,9 @@ export default function IssuesPage() {
     return () => clearInterval(interval);
   }, [issues, fetchIssues]);
 
-  const filtered = issues.filter((issue) => {
-    if (filter === "all") return true;
+  const displayIssues = filter === "archived" ? archivedIssues : issues;
+  const filtered = displayIssues.filter((issue) => {
+    if (filter === "all" || filter === "archived") return true;
     if (filter === "active") return !["completed", "failed", "pending"].includes(issue.status);
     if (filter === "completed") return issue.status === "completed";
     if (filter === "failed") return issue.status === "failed";
@@ -242,7 +338,10 @@ export default function IssuesPage() {
     { key: "active", label: "Up to No Good", count: issues.filter((i) => !["completed", "failed", "pending"].includes(i.status)).length },
     { key: "completed", label: "Mischief Managed", count: issues.filter((i) => i.status === "completed").length },
     { key: "failed", label: "Caught by Filch", count: issues.filter((i) => i.status === "failed").length },
+    { key: "archived", label: "Vanished", count: archivedCount },
   ];
+
+  const isShowingArchived = filter === "archived";
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -267,7 +366,36 @@ export default function IssuesPage() {
                   {cleanResult}
                 </span>
               )}
-              {worktreeCount > 0 && (
+              {archiveResult && (
+                <span className="text-[12px] font-mono text-green animate-fade-in">
+                  {archiveResult}
+                </span>
+              )}
+              {archivableCount > 0 && !isShowingArchived && (
+                <button
+                  onClick={handleArchiveAll}
+                  disabled={archiveAllState === "archiving"}
+                  className={`flex h-8 items-center gap-1.5 border px-3 text-[13px] font-mono transition-all ${
+                    archiveAllState === "confirming"
+                      ? "border-accent/50 bg-accent/10 text-accent hover:bg-accent/20"
+                      : archiveAllState === "archiving"
+                        ? "border-border bg-surface text-muted-foreground cursor-wait"
+                        : "border-border bg-surface text-muted-foreground hover:border-accent/50 hover:text-accent"
+                  }`}
+                >
+                  {archiveAllState === "archiving" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Archive className="h-3.5 w-3.5" />
+                  )}
+                  {archiveAllState === "confirming"
+                    ? "confirm?"
+                    : archiveAllState === "archiving"
+                      ? "archiving..."
+                      : `archive done (${archivableCount})`}
+                </button>
+              )}
+              {worktreeCount > 0 && !isShowingArchived && (
                 <button
                   onClick={handleCleanAll}
                   disabled={cleanAllState === "cleaning"}
@@ -329,7 +457,7 @@ export default function IssuesPage() {
         </div>
 
         {/* Loading */}
-        {loading && (
+        {(loading || (isShowingArchived && archivedLoading)) && (
           <div className="flex items-center justify-center py-24">
             <div className="flex items-center gap-2 text-[14px] font-mono text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
@@ -346,16 +474,28 @@ export default function IssuesPage() {
         )}
 
         {/* Empty state */}
-        {!loading && !error && issues.length === 0 && (
+        {!loading && !error && issues.length === 0 && !isShowingArchived && (
           <div className="animate-fade-in flex flex-col items-center justify-center py-24 text-center">
             <div className="text-[14px] font-mono text-muted-foreground space-y-1">
               <p className="text-muted">The map reveals nothing...</p>
-              <p className="text-muted-foreground">No mischief afoot</p>
-              <p className="text-muted mt-4">
-                Configure a repository in{" "}
-                <Link href="/issues/config" className="text-accent hover:underline">config</Link>
-                {" "}then send <code className="text-accent">/issue RepoName: description</code> via Telegram
-              </p>
+              {archivedCount > 0 ? (
+                <p className="text-muted-foreground">
+                  All quests vanished &mdash; check the{" "}
+                  <button onClick={() => setFilter("archived")} className="text-accent hover:underline">
+                    Vanished
+                  </button>{" "}
+                  tab
+                </p>
+              ) : (
+                <>
+                  <p className="text-muted-foreground">No mischief afoot</p>
+                  <p className="text-muted mt-4">
+                    Configure a repository in{" "}
+                    <Link href="/issues/config" className="text-accent hover:underline">config</Link>
+                    {" "}then send <code className="text-accent">/issue RepoName: description</code> via Telegram
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -368,7 +508,12 @@ export default function IssuesPage() {
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {filtered.map((issue, idx) => (
-                <IssueCard key={issue.id} issue={issue} index={idx} />
+                <IssueCard
+                  key={issue.id}
+                  issue={issue}
+                  index={idx}
+                  onArchive={!isShowingArchived ? handleArchiveOne : undefined}
+                />
               ))}
             </div>
           </>

@@ -50,6 +50,7 @@ export async function POST(
         planningSessionId: null, // Force fresh session on retry
         lockedBy: null,
         lockedAt: null,
+        archivedAt: null,
         updatedAt: new Date(),
       })
       .where(eq(issues.id, id))
