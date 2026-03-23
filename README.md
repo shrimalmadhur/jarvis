@@ -113,9 +113,43 @@ Dobby can also command **autonomous agents** that work on a schedule -- enchante
 
 ## Deploying to the Castle (Production)
 
-Dobby can be installed as a system service, standing guard at the gates of Hogwarts even while you sleep:
+Dobby can be installed as a system service, standing guard at the gates of Hogwarts even while you sleep.
+
+### One-Command Install (Recommended)
+
+No need to clone the repository -- a single incantation summons Dobby directly:
 
 ```bash
+# Install or upgrade -- one spell to rule them all
+curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash
+```
+
+For the cautious wizard who inspects scrolls before casting:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh -o get-dobby.sh
+less get-dobby.sh    # inspect the spell
+sudo bash get-dobby.sh
+```
+
+Advanced options:
+
+```bash
+# Install from a specific branch
+curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch dev
+
+# Install a specific version tag
+curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --version v0.2.0
+```
+
+### Manual Install (From Cloned Repo)
+
+If you prefer to clone the repository yourself:
+
+```bash
+git clone https://github.com/shrimalmadhur/dobby.git
+cd dobby
+
 # First-time installation -- the Sorting Ceremony (requires sudo)
 make install
 

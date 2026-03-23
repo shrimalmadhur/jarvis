@@ -50,7 +50,7 @@ if [ "$OS" = "Darwin" ]; then
 
     if ! command -v brew &>/dev/null; then
         echo "  Installing Homebrew..."
-        sudo -u "$ACTUAL_USER" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        sudo -u "$ACTUAL_USER" NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
     fi
     green "  Homebrew $(brew --version | head -1)"
