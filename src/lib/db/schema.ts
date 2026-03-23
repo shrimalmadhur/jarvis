@@ -273,6 +273,7 @@ export const issues = sqliteTable("issues", {
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
   completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
 }, (table) => [
   index("idx_issues_status_locked").on(table.status, table.lockedBy),
 ]);

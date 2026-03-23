@@ -36,6 +36,13 @@
       "when": 1774156481501,
       "tag": "0004_kind_young_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1774242369329,
+      "tag": "0005_brave_thunderbolts",
+      "breakpoints": true
     }
   ]
 }

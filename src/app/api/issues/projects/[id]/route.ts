@@ -25,7 +25,7 @@ export async function GET(
         issueCount: count(issues.id),
       })
       .from(repositories)
-      .leftJoin(issues, eq(issues.repositoryId, repositories.id))
+      .leftJoin(issues, and(eq(issues.repositoryId, repositories.id), isNull(issues.archivedAt)))
       .where(eq(repositories.id, id))
       .groupBy(repositories.id)
       .limit(1);

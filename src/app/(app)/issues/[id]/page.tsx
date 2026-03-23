@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -15,6 +16,8 @@ import {
   ChevronRight,
   XCircle,
   Zap,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { PIPELINE_PHASES } from "@/lib/issues/phase-labels";
@@ -50,6 +53,7 @@ interface IssueDetail {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  archivedAt: string | null;
   messages: { id: number; direction: string; message: string; createdAt: string }[];
 }
 
@@ -249,12 +253,14 @@ function CopyButton({ text }: { text: string }) {
 
 export default function IssueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cleaningUp, setCleaningUp] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const fetchIssue = useCallback(async () => {
     try {
@@ -315,6 +321,38 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
       }
     } catch { /* ignore */ } finally {
       setCleaningUp(false);
+    }
+  }
+
+  async function handleArchive() {
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/issues/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: true }),
+      });
+      if (res.ok) {
+        router.push("/issues");
+      }
+    } catch { /* ignore */ } finally {
+      setArchiving(false);
+    }
+  }
+
+  async function handleUnarchive() {
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/issues/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: false }),
+      });
+      if (res.ok) {
+        await fetchIssue();
+      }
+    } catch { /* ignore */ } finally {
+      setArchiving(false);
     }
   }
 
@@ -441,6 +479,26 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                   >
                     {cancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
                     cancel
+                  </button>
+                )}
+                {(issue.status === "completed" || issue.status === "failed") && !issue.archivedAt && (
+                  <button
+                    onClick={handleArchive}
+                    disabled={archiving}
+                    className="flex items-center gap-1.5 border border-border bg-surface px-3 py-1.5 text-[13px] font-mono text-muted-foreground hover:border-accent/50 hover:text-accent transition-all disabled:opacity-40"
+                  >
+                    {archiving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                    archive
+                  </button>
+                )}
+                {issue.archivedAt && (
+                  <button
+                    onClick={handleUnarchive}
+                    disabled={archiving}
+                    className="flex items-center gap-1.5 border border-accent/50 bg-accent/5 px-3 py-1.5 text-[13px] font-mono text-accent hover:bg-accent/10 transition-all disabled:opacity-40"
+                  >
+                    {archiving ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5" />}
+                    unarchive
                   </button>
                 )}
               </div>

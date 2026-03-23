@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { issues, issueMessages, repositories } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 export async function GET(
   _request: Request,
@@ -55,6 +55,7 @@ export async function GET(
       createdAt: issue.createdAt.toISOString(),
       updatedAt: issue.updatedAt.toISOString(),
       completedAt: issue.completedAt?.toISOString() || null,
+      archivedAt: issue.archivedAt?.toISOString() || null,
       messages: messages.map((m) => ({
         id: m.id,
         direction: m.direction,
@@ -90,10 +91,45 @@ export async function PATCH(
       updateData.error = typeof body.error === "string" ? body.error.substring(0, 10000) : null;
     }
 
+    if (body.archived !== undefined) {
+      if (typeof body.archived !== "boolean") {
+        return NextResponse.json(
+          { error: "archived must be a boolean" },
+          { status: 400 }
+        );
+      }
+      if (body.archived === true) {
+        // Only allow archiving terminal issues
+        const [current] = await db
+          .select({ status: issues.status })
+          .from(issues)
+          .where(eq(issues.id, id))
+          .limit(1);
+        if (!current) {
+          return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+        }
+        if (current.status !== "completed" && current.status !== "failed") {
+          return NextResponse.json(
+            { error: "Only completed or failed issues can be archived" },
+            { status: 400 }
+          );
+        }
+        updateData.archivedAt = new Date();
+      } else {
+        updateData.archivedAt = null;
+      }
+    }
+
+    // Use atomic WHERE with status guard to prevent TOCTOU race on archive
+    const whereConditions = [eq(issues.id, id)];
+    if (body.archived === true) {
+      whereConditions.push(inArray(issues.status, ["completed", "failed"]));
+    }
+
     const [updated] = await db
       .update(issues)
       .set(updateData)
-      .where(eq(issues.id, id))
+      .where(whereConditions.length > 1 ? and(...whereConditions) : whereConditions[0])
       .returning();
 
     if (!updated) {
