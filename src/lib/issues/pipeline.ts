@@ -1362,15 +1362,23 @@ export async function runIssuePipeline(
         timeoutMs: PHASE_TIMEOUT_MS,
       });
 
+      phaseSessionIds["7"] = prResult.sessionId!;
+
       if (!prResult.success) {
-        await failIssue(issueId, `PR creation failed: ${prResult.output.substring(0, 2000)}`);
+        await db.update(issues).set({ phaseSessionIds, status: "failed", error: `PR creation failed: ${prResult.output.substring(0, 2000)}`, updatedAt: new Date() }).where(eq(issues.id, issueId));
+        await notify(telegramConfig, `PR creation failed for: <b>${escapeHtml(issue.title)}</b>\n${escapeHtml(prResult.output.substring(0, 200))}`);
         return;
       }
 
-      const prUrlMatch = prResult.output.match(/https:\/\/github\.com\/[^\s)]+\/pull\/\d+/);
+      const prUrlMatch = prResult.output.match(/https:\/\/github\.com\/[\w.\-]+\/[\w.\-]+\/pull\/\d+/);
       const prUrl = prUrlMatch?.[0] || null;
 
-      phaseSessionIds["7"] = prResult.sessionId!;
+      if (!prUrl) {
+        await db.update(issues).set({ phaseSessionIds, status: "failed", error: `PR creation succeeded but no PR URL found in output. Claude may have failed to push or create the PR.\n\nOutput (truncated): ${prResult.output.substring(0, 2000)}`, updatedAt: new Date() }).where(eq(issues.id, issueId));
+        await notify(telegramConfig, `PR creation failed for: <b>${escapeHtml(issue.title)}</b>\nNo PR URL found in Claude output.`);
+        return;
+      }
+
       await db.update(issues).set({
         status: "completed",
         prUrl,
@@ -1380,8 +1388,7 @@ export async function runIssuePipeline(
       }).where(eq(issues.id, issueId));
 
       await notify(telegramConfig,
-        `Issue completed: <b>${escapeHtml(issue.title)}</b>\n` +
-        (prUrl ? `PR: ${prUrl}` : "PR created (check issue detail for link)")
+        `Issue completed: <b>${escapeHtml(issue.title)}</b>\nPR: ${escapeHtml(prUrl)}`
       );
     }
 
