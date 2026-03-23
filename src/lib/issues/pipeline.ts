@@ -16,6 +16,10 @@ import {
 
 const MAX_FALLBACK_CHARS = 50_000;
 
+/** Files that should never be auto-committed. Tested against full path from git status. */
+const SENSITIVE_FILE_PATTERN =
+  /\.(env|pem|key|p12|pfx|jks|keystore)(\..*)?$|\.npmrc$|\.pypirc$|id_(rsa|ed25519|ecdsa|dsa)$|credentials\.json$/i;
+
 /** Allowed env var prefixes/names for Claude CLI child processes. */
 const ALLOWED_ENV_KEYS = new Set([
   "PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "TMPDIR", "XDG_CONFIG_HOME",
@@ -572,7 +576,7 @@ ${review2}
 2. Address all review feedback
 3. Write tests for new functionality
 4. Ensure all existing tests still pass
-5. Commit your changes with clear commit messages
+5. CRITICAL: You MUST commit all changes before finishing. Run \`git add -A && git commit -m "feat: <description>"\`. Uncommitted changes will be lost.
 
 Do NOT create a PR — that will be done in a separate step.`;
 }
@@ -689,7 +693,7 @@ ${designReview}
 2. Fix every CRITICAL finding listed above
 3. Fix WARNING findings where the fix is straightforward
 4. Run tests after each fix to ensure no regressions
-5. Commit your fixes with clear commit messages
+5. CRITICAL: You MUST commit all fixes before finishing. Run \`git add -A && git commit -m "fix: <description>"\`. Uncommitted changes will be lost.
 6. Do NOT create a PR
 
 End with:
@@ -710,6 +714,71 @@ function ensureWorktreeClean(worktreeDir: string): void {
     }
   } catch (err) {
     console.error("[pipeline] ensureWorktreeClean failed:", err);
+  }
+}
+
+/**
+ * Auto-commit any uncommitted changes left behind by a phase.
+ * Prevents ensureWorktreeClean() from wiping real implementation work.
+ * Returns true if an auto-commit was created, false if worktree was already clean.
+ */
+function autoCommitUncommittedChanges(worktreeDir: string, commitMessage: string): boolean {
+  try {
+    const status = execFileSync("git", ["status", "--porcelain"], {
+      cwd: worktreeDir, encoding: "utf-8",
+    }).trim();
+
+    if (!status) return false;
+
+    // Porcelain format: 2-char status prefix + space + path (e.g., "?? file.txt", " M file.txt")
+    const lines = status.split("\n").filter(Boolean);
+    console.warn(`[pipeline] Auto-committing ${lines.length} uncommitted changes:`);
+    for (const l of lines) console.warn(`  ${l}`);
+
+    // Stage tracked file modifications
+    execFileSync("git", ["add", "-u"], { cwd: worktreeDir, stdio: "ignore" });
+
+    // Stage genuinely new files, skipping secrets/artifacts
+    const untracked = lines.filter(l => l.startsWith("??"));
+    const toStage: string[] = [];
+    for (const line of untracked) {
+      // Porcelain format: path starts at index 3. Git quotes paths with spaces/unicode.
+      let filePath = line.slice(3);
+      if (filePath.startsWith('"') && filePath.endsWith('"')) {
+        filePath = filePath.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      }
+      if (SENSITIVE_FILE_PATTERN.test(filePath)) {
+        console.warn(`[pipeline] Skipping suspicious file: ${filePath}`);
+        continue;
+      }
+      toStage.push(filePath);
+    }
+    if (toStage.length) {
+      execFileSync("git", ["add", "--", ...toStage], { cwd: worktreeDir, stdio: "ignore" });
+    }
+
+    execFileSync("git", ["commit", "-m", commitMessage], {
+      cwd: worktreeDir, encoding: "utf-8",
+    });
+    return true;
+  } catch (err) {
+    console.error("[pipeline] autoCommitUncommittedChanges failed:", err);
+    // Unstage to leave worktree in a predictable state for retry
+    try { execFileSync("git", ["reset", "HEAD"], { cwd: worktreeDir, stdio: "ignore" }); } catch { /* ignore */ }
+    return false;
+  }
+}
+
+/** Check whether the branch has any commits beyond the base branch. */
+function hasBranchCommits(worktreeDir: string, baseBranch: string): boolean {
+  try {
+    const log = execFileSync("git", ["log", `${baseBranch}..HEAD`, "--oneline"], {
+      cwd: worktreeDir, encoding: "utf-8",
+    }).trim();
+    return log.length > 0;
+  } catch (err) {
+    console.error(`[pipeline] Cannot compare against base branch '${baseBranch}':`, err);
+    return false;
   }
 }
 
@@ -1107,6 +1176,15 @@ export async function runIssuePipeline(
 
       phaseSessionIds["4"] = implResult.sessionId!;
       await db.update(issues).set({ phaseSessionIds, updatedAt: new Date() }).where(eq(issues.id, issueId));
+
+      // ── Commit gate: ensure implementation actually committed ──
+      autoCommitUncommittedChanges(worktreeDir,
+        "feat: implement changes\n\nAuto-committed by pipeline — implementation phase did not commit.");
+      if (!hasBranchCommits(worktreeDir, repo.defaultBranch)) {
+        await failIssue(issueId, "Implementation produced no changes — no commits found beyond base branch.");
+        return;
+      }
+
       await notify(telegramConfig, `Implementation complete. Starting code review...`);
     }
 
@@ -1243,16 +1321,24 @@ export async function runIssuePipeline(
           return;
         }
 
-        // Convergence check: if fix agent made no commits, loop won't converge
+        // Convergence check: did the fix agent make any commits?
+        // Must run BEFORE auto-commit so we measure the agent's own progress.
         try {
           const headAfter = execFileSync("git", ["rev-parse", "HEAD"], {
             cwd: worktreeDir, encoding: "utf-8",
           }).trim();
           if (headBefore && headBefore === headAfter) {
-            await notify(telegramConfig, `Fix agent made no changes. Stopping review loop.`);
+            // Auto-commit any leftover changes before breaking, so they aren't lost
+            autoCommitUncommittedChanges(worktreeDir,
+              "fix: address code review findings\n\nAuto-committed by pipeline — fix phase did not commit.");
+            await notify(telegramConfig, `Fix agent made no new commits. Stopping review loop.`);
             break;
           }
         } catch { /* ignore */ }
+
+        // Auto-commit any remaining uncommitted changes from the fix agent
+        autoCommitUncommittedChanges(worktreeDir,
+          "fix: address code review findings\n\nAuto-committed by pipeline — fix phase did not commit.");
 
         await notify(telegramConfig, `Fixes applied. Re-reviewing...`);
       }
