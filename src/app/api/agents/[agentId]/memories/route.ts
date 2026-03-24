@@ -8,6 +8,8 @@ import { getAgentWorkspaceDir } from "@/lib/runner/agent-runner";
 import { agentRowToDefinition } from "@/lib/runner/db-config-loader";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 /**
  * GET /api/agents/:agentId/memories - Read an agent's memory file
  */

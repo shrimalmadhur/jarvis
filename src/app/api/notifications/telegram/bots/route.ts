@@ -5,6 +5,8 @@ import { inArray } from "drizzle-orm";
 import { maskToken } from "@/lib/notifications/telegram";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const excludeAgentId = searchParams.get("exclude");

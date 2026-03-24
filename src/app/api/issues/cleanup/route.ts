@@ -5,6 +5,8 @@ import { issues, repositories } from "@/lib/db/schema";
 import { eq, and, isNotNull, isNull, inArray } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (request: Request) => {
   // Optional: scope cleanup to a specific repository
   let repositoryId: string | undefined;

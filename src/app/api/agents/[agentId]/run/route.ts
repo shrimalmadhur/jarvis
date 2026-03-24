@@ -8,6 +8,8 @@ import { getAgentTelegramConfig, sendAgentResult } from "@/lib/runner/telegram-s
 import { agentRowToDefinition } from "@/lib/runner/db-config-loader";
 import { startRun, emitRunEvent, endRun } from "@/lib/runner/run-events";
 
+export const runtime = "nodejs";
+
 export const maxDuration = 600; // 10 minutes
 
 // Track in-flight runs to prevent concurrent execution of the same agent

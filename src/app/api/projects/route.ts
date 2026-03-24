@@ -5,6 +5,8 @@ import { eq, count, desc } from "drizzle-orm";
 import { createProjectSchema } from "@/lib/validations/project";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async () => {
   const rows = await db
     .select({

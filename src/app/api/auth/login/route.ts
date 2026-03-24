@@ -7,6 +7,8 @@ import {
   SESSION_MAX_AGE,
 } from "@/lib/auth";
 
+export const runtime = "nodejs";
+
 // Simple in-memory rate limiter: max 5 failed attempts per IP per 15 minutes
 const failedAttempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_ATTEMPTS = 5;

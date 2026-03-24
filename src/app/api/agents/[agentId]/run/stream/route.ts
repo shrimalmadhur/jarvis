@@ -1,5 +1,7 @@
 import { subscribeToRun, isRunActive } from "@/lib/runner/run-events";
 
+export const runtime = "nodejs";
+
 export const dynamic = "force-dynamic";
 
 // Slightly longer than the 10-minute agent timeout

@@ -9,6 +9,8 @@ import {
 } from "@/lib/claude/session-store";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (request, { params }) => {
   const { id: sessionId } = await params;
   const { searchParams } = new URL(request.url);

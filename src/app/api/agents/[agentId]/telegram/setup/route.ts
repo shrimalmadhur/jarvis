@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { validateBotToken, pollForChat, clearPendingUpdates } from "@/lib/telegram/setup";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (request) => {
   const { botToken, action } = await request.json();
 

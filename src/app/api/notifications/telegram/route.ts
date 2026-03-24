@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { maskToken } from "@/lib/notifications/telegram";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 // GET - retrieve current Telegram config (token masked)
 export const GET = withErrorHandler(async () => {
   const rows = await db

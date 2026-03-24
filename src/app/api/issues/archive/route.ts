@@ -4,6 +4,8 @@ import { issues } from "@/lib/db/schema";
 import { and, eq, isNull, inArray } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (request: Request) => {
   let repositoryId: string | undefined;
   try {
