@@ -2,7 +2,11 @@
 # Dobby installer/upgrader — designed to be piped from curl:
 #
 #   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash
-#   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch dev
+#
+# By default, installs the latest released version. If no releases exist,
+# falls back to the main branch.
+#
+#   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch main
 #   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --version v0.2.0
 #
 # Or download-and-inspect first:
@@ -17,8 +21,9 @@ REPO_URL="https://github.com/shrimalmadhur/dobby.git"
 SRC_DIR="/usr/local/src/dobby"
 INSTALL_DIR="/usr/local/lib/dobby"
 LOCK_DIR="/var/lock/dobby-install.lock"
-BRANCH="main"
+BRANCH=""
 VERSION=""
+EXPLICIT_BRANCH=false
 OS="$(uname -s)"
 
 # ---------------------------------------------------------------------------
@@ -28,18 +33,66 @@ red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
 
+resolve_latest_version() {
+    # Derive GitHub API URL from REPO_URL so forks work correctly
+    local github_repo
+    github_repo=$(echo "$REPO_URL" | sed 's|.*github.com/||; s|\.git$||')
+    local api_url="https://api.github.com/repos/$github_repo/releases/latest"
+    local tag=""
+    local http_code=""
+    local response=""
+
+    # Try curl first (most likely available), fall back to wget
+    if command -v curl &>/dev/null; then
+        response=$(curl -fsSL --max-time 10 -w "\n%{http_code}" "$api_url" 2>/dev/null || true)
+        http_code=$(echo "$response" | tail -1)
+        if [[ "$http_code" == "200" ]]; then
+            tag=$(echo "$response" | grep -m1 '"tag_name"' | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)
+        elif [[ "$http_code" == "404" ]]; then
+            # Genuinely no releases — not an error
+            tag=""
+        else
+            # IMPORTANT: redirect to stderr — this function's stdout is captured
+            # by command substitution; writing diagnostics to stdout would corrupt
+            # the return value.
+            if [[ -z "$http_code" ]]; then
+                yellow "  Warning: Could not reach GitHub API — will use main branch" >&2
+            else
+                yellow "  Warning: Could not query GitHub API (HTTP $http_code) — will use main branch" >&2
+            fi
+            tag=""
+        fi
+    elif command -v wget &>/dev/null; then
+        # NOTE: wget path doesn't distinguish HTTP 404 (no releases) from other
+        # failures (rate limit, network error). All failures silently return empty.
+        # This is acceptable because curl is overwhelmingly more common and is
+        # already required to pipe this script (curl | bash).
+        tag=$(wget -qO- --timeout=10 "$api_url" 2>/dev/null | grep -m1 '"tag_name"' | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)
+    fi
+
+    echo "${tag:-}"
+}
+
 usage() {
     cat <<'EOF'
 Usage: curl -fsSL <url>/get-dobby.sh | sudo bash [-s -- OPTIONS]
 
+By default, installs the latest released version. If no releases exist,
+falls back to the main branch.
+
 Options:
-  --branch NAME     Clone/checkout a specific branch (default: main)
+  --branch NAME     Clone/checkout a specific branch (e.g., main, dev)
   --version TAG     Checkout a specific version tag (e.g., v0.2.0)
   --help            Show this help message
 
 Examples:
+  # Install latest release (default)
   curl -fsSL <url>/get-dobby.sh | sudo bash
-  curl -fsSL <url>/get-dobby.sh | sudo bash -s -- --branch dev
+
+  # Install from a specific branch
+  curl -fsSL <url>/get-dobby.sh | sudo bash -s -- --branch main
+
+  # Install a specific version
   curl -fsSL <url>/get-dobby.sh | sudo bash -s -- --version v0.2.0
 EOF
     exit 0
@@ -52,7 +105,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --branch)
             [[ -n "${2:-}" ]] || { red "Error: --branch requires a value"; exit 1; }
-            BRANCH="$2"; shift 2 ;;
+            BRANCH="$2"; EXPLICIT_BRANCH=true; shift 2 ;;
         --version|--tag)
             [[ -n "${2:-}" ]] || { red "Error: --version requires a value"; exit 1; }
             VERSION="$2"; shift 2 ;;
@@ -66,7 +119,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Reject mutually exclusive flags
-if [[ -n "$VERSION" ]] && [[ "$BRANCH" != "main" ]]; then
+if [[ -n "$VERSION" ]] && [[ "$EXPLICIT_BRANCH" == true ]]; then
     red "Error: --branch and --version are mutually exclusive"
     exit 1
 fi
@@ -102,6 +155,41 @@ fi
 
 ACTUAL_USER="${SUDO_USER:-$(whoami)}"
 ACTUAL_GROUP="$(id -gn "$ACTUAL_USER")"
+
+# ---------------------------------------------------------------------------
+# Resolve default version (latest release) if no explicit flags given
+# ---------------------------------------------------------------------------
+if [[ -z "$BRANCH" ]] && [[ -z "$VERSION" ]]; then
+    echo "Resolving latest release..."
+    LATEST=$(resolve_latest_version)
+    if [[ -n "$LATEST" ]]; then
+        VERSION="$LATEST"
+        green "  Latest release: $VERSION"
+    else
+        BRANCH="main"
+        yellow "  No releases found — installing from main branch"
+    fi
+elif [[ -z "$BRANCH" ]]; then
+    # --version was explicitly set, BRANCH not needed yet
+    BRANCH="main"  # Needed for initial clone
+fi
+
+# Ensure BRANCH has a value for cloning (even when using VERSION, we clone main first)
+if [[ -z "$BRANCH" ]]; then
+    BRANCH="main"
+fi
+
+# Validate auto-resolved version (same checks as user-provided VERSION above)
+if [[ -n "$VERSION" ]] && ! [[ "$VERSION" =~ ^[a-zA-Z0-9._/][a-zA-Z0-9._/-]*$ ]]; then
+    yellow "  Warning: Unexpected tag format '$VERSION' — falling back to main branch"
+    VERSION=""
+    BRANCH="main"
+fi
+if [[ -n "$VERSION" ]] && [[ "$VERSION" == *".."* ]]; then
+    yellow "  Warning: Unexpected tag format '$VERSION' — falling back to main branch"
+    VERSION=""
+    BRANCH="main"
+fi
 
 # ---------------------------------------------------------------------------
 # Portable lock (mkdir is atomic on all filesystems)
@@ -236,6 +324,7 @@ else
     chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$SRC_DIR"
 
     if [ -n "$VERSION" ]; then
+        sudo -u "$ACTUAL_USER" git -C "$SRC_DIR" fetch origin --tags
         sudo -u "$ACTUAL_USER" git -C "$SRC_DIR" checkout "$VERSION"
     fi
 fi

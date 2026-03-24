@@ -33,11 +33,13 @@ The production install handles all dependencies automatically (git, curl, sqlite
 
 ### Quick Install (Recommended)
 
-A single command to install or upgrade Dobby:
+A single command to install or upgrade Dobby to the latest release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash
 ```
+
+This installs the latest released version. If no releases exist yet, it falls back to the `main` branch.
 
 To inspect the script before running:
 
@@ -50,6 +52,9 @@ sudo bash get-dobby.sh
 Advanced options:
 
 ```bash
+# Install from the main branch (latest development)
+curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch main
+
 # Install from a specific branch
 curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch dev
 
@@ -88,9 +93,13 @@ Then restart the service (see [Managing the Service](#managing-the-service) belo
 
 Use the same method you used to install:
 
-- **Curl-installed** (no local clone): re-run the curl command -- it is idempotent:
+- **Curl-installed** (no local clone): re-run the curl command — it upgrades to the latest release:
   ```bash
   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash
+  ```
+  To track the `main` branch instead, pass `--branch main` explicitly:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch main
   ```
 - **Clone-installed** (local repo): pull the latest code and run:
   ```bash
