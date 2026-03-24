@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
+import { getIssueAttachments, deleteIssueAttachmentFiles } from "@/lib/issues/attachments";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,8 @@ export const GET = withErrorHandler(async (
     .where(eq(issueMessages.issueId, id))
     .orderBy(issueMessages.createdAt);
 
+  const attachments = await getIssueAttachments(id);
+
   return NextResponse.json({
     id: issue.id,
     repositoryId: issue.repositoryId,
@@ -64,6 +67,13 @@ export const GET = withErrorHandler(async (
       direction: m.direction,
       message: m.message,
       createdAt: m.createdAt.toISOString(),
+    })),
+    attachments: attachments.map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      fileSize: a.fileSize,
+      createdAt: a.createdAt.toISOString(),
     })),
   });
 });
@@ -168,6 +178,9 @@ export const DELETE = withErrorHandler(async (
       // Best effort cleanup
     }
   }
+
+  // Clean up attachment files from disk (DB records cascade-deleted)
+  await deleteIssueAttachmentFiles(id);
 
   await db.delete(issues).where(eq(issues.id, id));
 

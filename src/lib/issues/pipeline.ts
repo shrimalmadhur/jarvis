@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { issues, issueMessages, repositories } from "@/lib/db/schema";
+import { getIssueAttachments } from "./attachments";
 import { eq, and, gt } from "drizzle-orm";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 import { getSetting, setSetting } from "@/lib/db/app-settings";
@@ -374,7 +375,12 @@ function buildResumePlanningPrompt(
   reviewFeedback: string | null | undefined,
   completenessReview: string | null | undefined,
   userAnswers: string | null,
+  attachmentPaths: string[] = [],
 ): string {
+  const attachmentReminder = attachmentPaths.length > 0
+    ? `\n\n## Attached Images (still available)\nUse the Read tool to view these images for visual context:\n${attachmentPaths.map(p => `- ${p}`).join("\n")}\n`
+    : "";
+
   if (reviewFeedback) {
     return `Your previous plan was reviewed and found to have issues. Create a REVISED plan addressing all feedback below.
 
@@ -382,7 +388,7 @@ function buildResumePlanningPrompt(
 ${reviewFeedback}
 ${completenessReview ? `\n## Completeness Review Feedback\n${completenessReview}` : ""}
 ${userAnswers ? `\n## User's Answers to Your Questions\n${userAnswers}` : ""}
-
+${attachmentReminder}
 Revise your implementation plan to address all the review feedback. Include the "## Codebase Analysis" section again.
 End with "VERDICT: READY" or "## Questions" if you need more information.`;
   }
@@ -390,12 +396,13 @@ End with "VERDICT: READY" or "## Questions" if you need more information.`;
     return `Here are the answers to your questions:
 
 ${userAnswers}
-
+${attachmentReminder}
 Please update your implementation plan based on these answers. Include the "## Codebase Analysis" section.
 End with "VERDICT: READY" or "## Questions" if you need more information.`;
   }
   // Resuming after crash with no new context — ask to continue
   return `Continue your implementation plan where you left off. Include the "## Codebase Analysis" section.
+${attachmentReminder}
 End with "VERDICT: READY" or "## Questions" if you need more information.`;
 }
 
@@ -406,8 +413,9 @@ function buildFullPlanningPrompt(
   reviewFeedback: string | null | undefined,
   completenessReview: string | null | undefined,
   userAnswers: string | null,
+  attachmentPaths: string[] = [],
 ): string {
-  let prompt = buildPlanningPrompt(description);
+  let prompt = buildPlanningPrompt(description, attachmentPaths);
   if (planOutput && reviewFeedback) {
     prompt += `\n\n## Previous Plan Review Feedback\n${reviewFeedback}`;
   }
@@ -422,11 +430,16 @@ function buildFullPlanningPrompt(
 
 // ── Prompt builders ──────────────────────────────────────────
 
-function buildPlanningPrompt(description: string): string {
+function buildPlanningPrompt(description: string, attachmentPaths: string[] = []): string {
+  const attachmentSection = attachmentPaths.length > 0
+    ? `\n\n## Attached Images\nThe following images were provided with this issue. Use the Read tool to view them for visual context:\n${attachmentPaths.map(p => `- ${p}`).join("\n")}`
+    : "";
+
   return `You are tasked with creating a detailed implementation plan for the following issue.
 
 ## Issue Description
 ${description}
+${attachmentSection}
 
 ## Instructions
 1. Analyze the codebase to understand the existing architecture and patterns
@@ -558,7 +571,11 @@ ${priorFindings ? "7. Also verify that ALL previously identified issues (listed 
 Output the COMPLETE revised plan (not just the diffs). The output must be a standalone, clean plan that can be handed directly to an implementer. Do NOT include a changelog, commentary, or summary of what was changed — just output the revised plan text and nothing else.`;
 }
 
-function buildImplementationPrompt(plan: string, review1: string, review2: string): string {
+function buildImplementationPrompt(plan: string, review1: string, review2: string, attachmentPaths: string[] = []): string {
+  const attachmentSection = attachmentPaths.length > 0
+    ? `\n\n## Attached Images\nUse the Read tool to view these images for visual context:\n${attachmentPaths.map(p => `- ${p}`).join("\n")}`
+    : "";
+
   return `Implement the following plan. Follow it precisely, incorporating the review feedback.
 
 ## Implementation Plan
@@ -570,6 +587,7 @@ ${review1}
 
 ### Completeness Review
 ${review2}
+${attachmentSection}
 
 ## Instructions
 1. Implement each step of the plan
@@ -782,12 +800,17 @@ function hasBranchCommits(worktreeDir: string, baseBranch: string): boolean {
   }
 }
 
-function buildPrCreationPrompt(title: string, description: string, defaultBranch: string): string {
+function buildPrCreationPrompt(title: string, description: string, defaultBranch: string, attachmentPaths: string[] = []): string {
+  const attachmentSection = attachmentPaths.length > 0
+    ? `\n\n## Attached Images\nUse the Read tool to view these images for visual context when writing the PR description:\n${attachmentPaths.map(p => `- ${p}`).join("\n")}`
+    : "";
+
   return `Create a pull request for the changes on this branch.
 
 ## Issue Details
 Title: ${title}
 Description: ${description}
+${attachmentSection}
 
 ## Instructions
 1. Push the current branch to the remote
@@ -895,10 +918,13 @@ export async function runIssuePipeline(
           // Hoist DB queries above the branching logic (avoids duplication)
           const [currentIssue] = await db.select().from(issues).where(eq(issues.id, issueId));
           const userAnswers = await getUserAnswers(issueId);
+          // Re-query attachments each iteration (user may add photos via Q&A replies)
+          const attachments = await getIssueAttachments(issueId);
+          const attachmentPaths = attachments.map(a => a.filePath);
 
           // Build the full prompt (used for fresh sessions and as fallback)
           const freshPrompt = buildFullPlanningPrompt(
-            issue.description, planOutput, currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
+            issue.description, planOutput, currentIssue?.planReview1, currentIssue?.planReview2, userAnswers, attachmentPaths,
           );
 
           // Run Phase 1 — create, resume, or fresh fallback
@@ -917,7 +943,7 @@ export async function runIssuePipeline(
           } else if (resumeSupported) {
             // RESUME the planning session (keeps exploration context!)
             const resumePrompt = buildResumePlanningPrompt(
-              currentIssue?.planReview1, currentIssue?.planReview2, userAnswers,
+              currentIssue?.planReview1, currentIssue?.planReview2, userAnswers, attachmentPaths,
             );
             planResult = await runClaudePhase({
               workdir: worktreeDir,
@@ -1121,10 +1147,14 @@ export async function runIssuePipeline(
       await updatePhase(issueId, 4, "implementing");
 
       const [currentIssue] = await db.select().from(issues).where(eq(issues.id, issueId));
+      // Re-query attachments (user may have added photos via Q&A replies since planning)
+      const implAttachments = await getIssueAttachments(issueId);
+      const implAttachmentPaths = implAttachments.map(a => a.filePath);
       let implPrompt = buildImplementationPrompt(
         currentIssue?.planOutput || "",
         currentIssue?.planReview1 || "",
-        currentIssue?.planReview2 || ""
+        currentIssue?.planReview2 || "",
+        implAttachmentPaths,
       );
       const userAnswers = await getUserAnswers(issueId);
       if (userAnswers) {
@@ -1355,9 +1385,11 @@ export async function runIssuePipeline(
       if (await isCancelled(issueId)) return;
       await updatePhase(issueId, 7, "creating_pr");
 
+      const prAttachments = await getIssueAttachments(issueId);
+      const prAttachmentPaths = prAttachments.map(a => a.filePath);
       const prResult = await runClaudePhase({
         workdir: worktreeDir,
-        prompt: buildPrCreationPrompt(issue.title, issue.description, repo.defaultBranch),
+        prompt: buildPrCreationPrompt(issue.title, issue.description, repo.defaultBranch, prAttachmentPaths),
         systemPrompt: "Create a pull request using the gh CLI.",
         timeoutMs: PHASE_TIMEOUT_MS,
       });

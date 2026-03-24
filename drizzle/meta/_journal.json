@@ -57,6 +57,20 @@
       "when": 1774387590923,
       "tag": "0007_awesome_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1774389451641,
+      "tag": "0008_odd_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1774389551641,
+      "tag": "0009_fantastic_blindfold",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
 import { PHASE_STATUS_MAP } from "./types";
 import type { TelegramUpdate, IssuesTelegramConfig } from "./types";
+import { saveTelegramPhoto } from "./attachments";
 
 const ipv4Agent = new https.Agent({ family: 4 });
 
@@ -78,7 +79,7 @@ export function parseIssueMessage(text: string): { repoName: string; description
 
 /**
  * Process a single Telegram update.
- * - New /issue message: create issue in DB
+ * - New /issue message (text or photo+caption): create issue in DB
  * - Reply to a Claude question: store as user reply
  * Validates that the chat_id matches the configured issues chat.
  */
@@ -87,7 +88,9 @@ export async function processTelegramUpdate(
   config: IssuesTelegramConfig
 ): Promise<void> {
   const msg = update.message;
-  if (!msg?.text) return;
+  // Accept text OR caption (photo messages use caption instead of text)
+  const messageText = msg?.text || msg?.caption;
+  if (!msg || !messageText) return;
 
   // Security: only accept messages from the configured chat
   if (String(msg.chat.id) !== config.chatId) return;
@@ -102,13 +105,23 @@ export async function processTelegramUpdate(
       .limit(1);
 
     if (issueMsg && issueMsg.direction === "from_claude") {
-      // Store user reply
+      // Store user reply (messageText handles both text and photo captions)
       await db.insert(issueMessages).values({
         issueId: issueMsg.issueId,
         direction: "from_user",
-        message: msg.text,
+        message: messageText,
         telegramMessageId: msg.message_id,
       });
+
+      // Download photos attached to reply (if any)
+      if (msg.photo && msg.photo.length > 0) {
+        const largestPhoto = msg.photo[msg.photo.length - 1];
+        try {
+          await saveTelegramPhoto(config.botToken, issueMsg.issueId, largestPhoto.file_id);
+        } catch (err) {
+          console.error(`[poller] Failed to download reply photo for issue ${issueMsg.issueId}:`, err);
+        }
+      }
 
       // If issue is waiting_for_input, update status back to the phase it was in
       const [issue] = await db
@@ -128,7 +141,7 @@ export async function processTelegramUpdate(
   }
 
   // Check if this is a new issue
-  const parsed = parseIssueMessage(msg.text);
+  const parsed = parseIssueMessage(messageText);
   if (!parsed) return;
 
   // Look up repository (case-insensitive)
@@ -155,6 +168,16 @@ export async function processTelegramUpdate(
     telegramMessageId: msg.message_id,
     telegramChatId: String(msg.chat.id),
   }).returning();
+
+  // Download and save attached photos (non-fatal on failure)
+  if (msg.photo && msg.photo.length > 0) {
+    const largestPhoto = msg.photo[msg.photo.length - 1];
+    try {
+      await saveTelegramPhoto(config.botToken, newIssue.id, largestPhoto.file_id);
+    } catch (err) {
+      console.error(`[poller] Failed to download photo for issue ${newIssue.id}:`, err);
+    }
+  }
 
   await sendTelegramMessage(config,
     `Issue created: <b>${escapeHtml(title)}</b>\n` +

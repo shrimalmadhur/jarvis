@@ -56,6 +56,7 @@ interface IssueDetail {
   completedAt: string | null;
   archivedAt: string | null;
   messages: { id: number; direction: string; message: string; createdAt: string }[];
+  attachments?: { id: number; filename: string; mimeType: string; fileSize: number | null; createdAt: string }[];
 }
 
 const PHASES = PIPELINE_PHASES;
@@ -539,6 +540,31 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
         {/* Description */}
         <CollapsibleSection title="Quest Description" content={issue.description} defaultOpen />
+
+        {/* Attached Images */}
+        {issue.attachments && issue.attachments.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-sm font-medium text-zinc-400">Attached Images</h3>
+            <div className="flex flex-wrap gap-3">
+              {issue.attachments.map((att) => (
+                <a
+                  key={att.id}
+                  href={`/api/issues/attachments/${att.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/issues/attachments/${att.id}`}
+                    alt={att.filename}
+                    className="max-w-xs max-h-64 rounded border border-zinc-700 hover:border-zinc-500 transition-colors"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Phase outputs — each with session link when available */}
         {phaseOutputSections.map(({ title, content, phaseKey, defaultOpen }) => (

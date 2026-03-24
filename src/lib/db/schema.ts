@@ -291,3 +291,16 @@ export const issueMessages = sqliteTable("issue_messages", {
   telegramMessageId: integer("telegram_message_id"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });
+
+// ── Issue Attachments (images from Telegram) ─────────────────
+
+export const issueAttachments = sqliteTable("issue_attachments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  issueId: text("issue_id").references(() => issues.id, { onDelete: "cascade" }).notNull(),
+  filename: text("filename").notNull(),
+  filePath: text("file_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size"),
+  telegramFileId: text("telegram_file_id"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
+});

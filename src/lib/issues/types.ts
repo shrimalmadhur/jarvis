@@ -22,12 +22,16 @@ export const PHASE_TIMEOUT_MS = 15 * 60 * 1000;  // 15 min
 export const IMPL_TIMEOUT_MS = 30 * 60 * 1000;   // 30 min
 export const QA_TIMEOUT_MS = 30 * 60 * 1000;      // 30 min wait for reply
 
+import type { TelegramPhotoSize } from "@/lib/telegram/api";
+
 export interface TelegramUpdate {
   update_id: number;
   message?: {
     message_id: number;
     chat: { id: number };
     text?: string;
+    caption?: string;
+    photo?: TelegramPhotoSize[];
     reply_to_message?: {
       message_id: number;
     };
