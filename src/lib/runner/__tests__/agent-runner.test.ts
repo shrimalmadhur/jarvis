@@ -106,6 +106,31 @@ describe("runAgentTask", () => {
     expect(result.error).toBeTruthy();
   });
 
+  test("result includes claudeSessionId as valid UUID and claudeSessionProjectDir", async () => {
+    process.env.MOCK_CLAUDE_MODE = "success";
+    const def = makeDefinition();
+    const result = await runAgentTask(def);
+
+    expect(result.claudeSessionId).toBeDefined();
+    expect(result.claudeSessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+    expect(result.claudeSessionProjectDir).toBeDefined();
+    expect(result.claudeSessionProjectDir!.length).toBeGreaterThan(0);
+  });
+
+  test("claudeSessionId is set even on failed runs", async () => {
+    process.env.MOCK_CLAUDE_MODE = "failure";
+    const def = makeDefinition();
+    const result = await runAgentTask(def);
+
+    expect(result.success).toBe(false);
+    expect(result.claudeSessionId).toBeDefined();
+    expect(result.claudeSessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+  });
+
   test("system prompt does NOT contain write-memory instructions", async () => {
     // We can't directly inspect the system prompt sent to CLI from here,
     // but we verify the constant used doesn't have write instructions

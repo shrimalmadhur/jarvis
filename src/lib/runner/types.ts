@@ -32,4 +32,6 @@ export interface RunResult {
   toolUses: ToolUseLog[];
   durationMs: number;
   error?: string;
+  claudeSessionId?: string;
+  claudeSessionProjectDir?: string;
 }

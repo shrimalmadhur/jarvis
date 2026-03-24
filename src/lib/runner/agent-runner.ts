@@ -5,6 +5,7 @@ import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 import type { RunEvent } from "./run-events";
 import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, AGENT_OUTPUT_RULES, updateMemoryAfterRun, buildChildEnv, hasWorkspaceArchive } from "./agent-memory";
+import { encodeProjectDir } from "@/lib/claude/utils";
 
 /** State accumulated while processing JSONL stream events from Claude CLI */
 interface StreamState {
@@ -214,11 +215,16 @@ export async function runAgentTask(
   // 2. Output rules (deliverable-only output, no housekeeping remarks)
   const systemPrompt = definition.soul + MEMORY_CONTEXT_NOTE + AGENT_OUTPUT_RULES;
 
+  // Generate a session ID so we can link agent runs to Claude sessions in Pensieve
+  const sessionId = crypto.randomUUID();
+  const sessionProjectDir = encodeProjectDir(workspaceDir);
+
   const args = [
     "-p",
     "--verbose",
     "--output-format", "stream-json",
     "--dangerously-skip-permissions",
+    "--session-id", sessionId,
     "--append-system-prompt", systemPrompt,
   ];
 
@@ -277,6 +283,8 @@ export async function runAgentTask(
       tokensUsed: { prompt: state.promptTokens, completion: state.completionTokens },
       toolUses: state.toolUses,
       durationMs,
+      claudeSessionId: sessionId,
+      claudeSessionProjectDir: sessionProjectDir,
       ...(error ? { error } : {}),
     });
 

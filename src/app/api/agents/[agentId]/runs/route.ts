@@ -37,6 +37,8 @@ export const GET = withErrorHandler(async (request, { params }) => {
       toolUseCount: r.toolUseCount,
       durationMs: r.durationMs,
       error: r.error,
+      claudeSessionId: r.claudeSessionId || null,
+      claudeSessionProjectDir: r.claudeSessionProjectDir || null,
       createdAt: r.createdAt?.toISOString() || null,
     })),
     total: totalResult[0]?.count || 0,

@@ -17,6 +17,8 @@ export async function logRun(result: RunResult): Promise<void> {
     toolUseCount: result.toolUses.length,
     durationMs: result.durationMs,
     error: result.error || null,
+    claudeSessionId: result.claudeSessionId || null,
+    claudeSessionProjectDir: result.claudeSessionProjectDir || null,
   }).returning();
 
   // Log individual tool uses

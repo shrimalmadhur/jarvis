@@ -210,6 +210,8 @@ export const agentRuns = sqliteTable("agent_runs", {
   toolUseCount: integer("tool_use_count").default(0),
   durationMs: integer("duration_ms"),
   error: text("error"),
+  claudeSessionId: text("claude_session_id"),
+  claudeSessionProjectDir: text("claude_session_project_dir"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });
 

@@ -82,6 +82,8 @@ export async function POST(
         toolUseCount: result.toolUses.length,
         durationMs: result.durationMs,
         error: result.error || null,
+        claudeSessionId: result.claudeSessionId || null,
+        claudeSessionProjectDir: result.claudeSessionProjectDir || null,
       },
     });
     endRun(agentId);
@@ -110,6 +112,8 @@ export async function POST(
       toolUseCount: result.toolUses.length,
       durationMs: result.durationMs,
       error: result.error || null,
+      claudeSessionId: result.claudeSessionId || null,
+      claudeSessionProjectDir: result.claudeSessionProjectDir || null,
     });
   } catch (error) {
     runningAgents.delete(agentId);

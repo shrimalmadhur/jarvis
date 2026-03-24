@@ -23,6 +23,7 @@ import {
   Key,
   Wrench,
   Play,
+  ExternalLink,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { AgentForm } from "@/components/agents/agent-form";
@@ -54,6 +55,8 @@ interface AgentRun {
   toolUseCount: number | null;
   durationMs: number | null;
   error: string | null;
+  claudeSessionId: string | null;
+  claudeSessionProjectDir: string | null;
   createdAt: string | null;
 }
 
@@ -181,8 +184,16 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
             </div>
           )}
 
-          {/* Tool Uses */}
-          {(run.toolUseCount ?? 0) > 0 && (
+          {/* Session link (new runs) or Tool Log fallback (old runs without session) */}
+          {run.claudeSessionId && run.claudeSessionProjectDir ? (
+            <Link
+              href={`/sessions/${run.claudeSessionId}?project=${encodeURIComponent(run.claudeSessionProjectDir)}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[13px] font-medium text-accent transition-colors hover:bg-accent/10 hover:border-accent/30"
+            >
+              <ExternalLink className="h-3 w-3" />
+              View Session
+            </Link>
+          ) : (run.toolUseCount ?? 0) > 0 ? (
             <div className="rounded-lg border border-border/50 bg-background/60 overflow-hidden">
               <button
                 onClick={async () => {
@@ -242,7 +253,7 @@ function RunItem({ run, index, agentId }: { run: AgentRun; index: number; agentI
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           {run.output && (
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
