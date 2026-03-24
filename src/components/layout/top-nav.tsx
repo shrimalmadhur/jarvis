@@ -15,6 +15,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getVersion } from "@/lib/version";
 
 const navItems = [
   { href: "/chat", label: "Owl Post", icon: MessageSquare },
@@ -27,6 +28,8 @@ const navItems = [
 interface TopNavProps {
   onNewChat: () => void;
 }
+
+const version = getVersion();
 
 export function TopNav({ onNewChat }: TopNavProps) {
   const pathname = usePathname();
@@ -99,6 +102,14 @@ export function TopNav({ onNewChat }: TopNavProps) {
         <span className="h-2 w-2 rounded-full bg-green status-dot-live" />
         <span className="text-[13px] text-muted-foreground">Enchanted</span>
       </div>
+
+      {/* Version */}
+      <span
+        className="text-[11px] text-muted-foreground/60 font-mono mr-4 cursor-default"
+        title={`Tag: ${version.tag || "–"} | Branch: ${version.branch || "–"} | Commit: ${version.commit || "–"}`}
+      >
+        {version.label}
+      </span>
 
       {/* Theme toggle */}
       <button
