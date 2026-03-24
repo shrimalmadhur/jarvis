@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getVersion } from "@/lib/version";
 import {
   Plus,
   Trash2,
@@ -162,6 +163,8 @@ interface MCPServer {
   env: Record<string, string>;
   enabled: boolean;
 }
+
+const version = getVersion();
 
 const inputClasses =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-border-hover input-focus";
@@ -974,6 +977,13 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+        {/* Version */}
+        <div className="mt-8 text-center text-[12px] text-muted-foreground/50 font-mono">
+          {version.tag && <span>Version {version.tag}</span>}
+          {!version.tag && version.branch && <span>Branch: {version.branch}</span>}
+          {version.commit && <span> · {version.commit}</span>}
+          {!version.tag && !version.branch && !version.commit && <span>dev</span>}
+        </div>
       </div>
     </div>
   );
