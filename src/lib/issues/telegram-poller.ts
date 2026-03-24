@@ -1,14 +1,12 @@
 import nodeFetch from "node-fetch";
-import https from "node:https";
 import { db } from "@/lib/db";
 import { repositories, issues, issueMessages, notificationConfigs } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
+import { ipv4Agent } from "@/lib/telegram/api";
 import { PHASE_STATUS_MAP } from "./types";
 import type { TelegramUpdate, IssuesTelegramConfig } from "./types";
 import { saveTelegramPhoto } from "./attachments";
-
-const ipv4Agent = new https.Agent({ family: 4 });
 
 /**
  * Load the dedicated issues Telegram bot config from notification_configs.
@@ -88,12 +86,13 @@ export async function processTelegramUpdate(
   config: IssuesTelegramConfig
 ): Promise<void> {
   const msg = update.message;
-  // Accept text OR caption (photo messages use caption instead of text)
-  const messageText = msg?.text || msg?.caption;
-  if (!msg || !messageText) return;
+  if (!msg) return;
 
   // Security: only accept messages from the configured chat
   if (String(msg.chat.id) !== config.chatId) return;
+
+  // Accept text OR caption (photo messages use caption instead of text)
+  const messageText = msg.text || msg.caption;
 
   // Check if this is a reply to a Claude question
   if (msg.reply_to_message) {
@@ -105,11 +104,11 @@ export async function processTelegramUpdate(
       .limit(1);
 
     if (issueMsg && issueMsg.direction === "from_claude") {
-      // Store user reply (messageText handles both text and photo captions)
+      // Store user reply — use messageText if available, or "[photo attached]" for photo-only replies
       await db.insert(issueMessages).values({
         issueId: issueMsg.issueId,
         direction: "from_user",
-        message: messageText,
+        message: messageText || "[photo attached]",
         telegramMessageId: msg.message_id,
       });
 
@@ -139,6 +138,9 @@ export async function processTelegramUpdate(
       return;
     }
   }
+
+  // From here on, we need messageText for /issue command parsing
+  if (!messageText) return;
 
   // Check if this is a new issue
   const parsed = parseIssueMessage(messageText);

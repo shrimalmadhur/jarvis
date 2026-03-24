@@ -1,7 +1,7 @@
 import https from "node:https";
 import nodeFetch from "node-fetch";
 
-const ipv4Agent = new https.Agent({ family: 4 });
+export const ipv4Agent = new https.Agent({ family: 4 });
 
 export interface TelegramUser {
   id: number;
@@ -73,7 +73,7 @@ export interface TelegramFile {
   file_path?: string;
 }
 
-const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB cap
+export const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB cap
 
 /** Get file metadata including download path from Telegram servers. */
 export async function getFile(botToken: string, fileId: string): Promise<TelegramFile> {
@@ -98,6 +98,10 @@ export async function getFile(botToken: string, fileId: string): Promise<Telegra
 
 /** Download a file from Telegram servers, return as Buffer. Enforces a 10 MB size cap. */
 export async function downloadTelegramFile(botToken: string, filePath: string): Promise<Buffer> {
+  // Validate file_path to prevent SSRF / path injection
+  if (!filePath || filePath.includes("..") || filePath.includes("?") || filePath.includes("#")) {
+    throw new Error(`Invalid Telegram file_path: ${filePath}`);
+  }
   const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
   const response = await nodeFetch(url, { agent: ipv4Agent, timeout: 30000 } as never);
   if (!response.ok) throw new Error(`Failed to download file: HTTP ${response.status}`);

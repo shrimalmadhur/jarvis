@@ -303,4 +303,6 @@ export const issueAttachments = sqliteTable("issue_attachments", {
   fileSize: integer("file_size"),
   telegramFileId: text("telegram_file_id"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
-});
+}, (table) => [
+  index("idx_issue_attachments_issue_id").on(table.issueId),
+]);

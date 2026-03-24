@@ -1,11 +1,8 @@
-import https from "node:https";
 import nodeFetch from "node-fetch";
 import { db } from "@/lib/db";
 import { notificationConfigs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-
-// Reuse the IPv4 agent pattern from src/lib/db/index.ts
-const ipv4Agent = new https.Agent({ family: 4 });
+import { ipv4Agent } from "@/lib/telegram/api";
 
 /** Telegram's hard limit for message length */
 export const TELEGRAM_MAX_MSG_LEN = 4096;
