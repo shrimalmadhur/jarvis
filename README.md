@@ -2,133 +2,48 @@
 
 > *"Dobby is a free elf!"*
 
-A local-first personal AI agent with a web chat interface. No masters, no Ministry oversight, no Gringotts billing -- just a loyal house-elf devoted to a single wizard. Give Dobby a sock (an API key), and Dobby shall serve you faithfully.
+A local-first personal AI agent with a web chat interface. Single-user, self-hosted, no external databases. Dobby connects to multiple LLM providers (Gemini, OpenAI, Anthropic), extends its capabilities through MCP (Model Context Protocol) servers, and can run autonomous scheduled agents with Telegram notifications.
 
-Dobby wields MCP (Model Context Protocol) to connect with external magical services, and speaks through multiple LLM providers (Gemini, OpenAI, Anthropic) -- choose your wand core wisely.
+## Features
 
-## The Spellbook (Tech Stack)
+- **Web chat UI** with conversation history and streaming responses
+- **Multi-provider LLM support** -- Gemini (default), OpenAI, Anthropic
+- **MCP integration** -- extend Dobby with any MCP-compatible tool server
+- **Autonomous agents** -- scheduled tasks organized into projects, managed via UI
+- **SQLite database** -- no external database setup required
+- **Telegram notifications** -- per-agent bot notifications for scheduled runs
+- **System service** -- runs as systemd (Linux) or launchd (macOS)
 
-| Artifact | Enchantment |
-|----------|-------------|
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
 | **Framework** | Next.js 16 App Router, React 19, TypeScript |
-| **Styling** | Tailwind CSS v4 -- robes tailored to perfection |
-| **Database** | SQLite via `bun:sqlite` + `drizzle-orm` -- Dobby's Pensieve |
-| **LLM Providers** | Gemini (default), OpenAI, Anthropic -- three wand cores |
-| **Tools** | MCP servers + built-in filesystem/time tools -- Dobby's toolkit |
-| **Runtime** | Bun -- swift as a Nimbus 2000 |
+| **Styling** | Tailwind CSS v4 |
+| **Database** | SQLite via `bun:sqlite` + `drizzle-orm` |
+| **LLM Providers** | Gemini (default), OpenAI, Anthropic |
+| **Tools** | MCP servers + built-in filesystem/time tools |
+| **Runtime** | Bun |
 
-## Summoning Dobby (Getting Started)
+## Installation
 
-Every great wizard needs a house-elf. Here is how you call upon Dobby.
+The production install handles all dependencies automatically (git, curl, sqlite3, build tools, Bun). You only need `curl` and `sudo` to get started.
 
-### Prerequisites
+**Supported platforms:** Linux (apt, dnf, pacman, apk) and macOS.
 
-Before you begin, gather these magical artifacts from Diagon Alley:
+### Quick Install (Recommended)
 
-- **[Bun](https://bun.sh/)** -- the enchanted runtime that powers Dobby's spells
-- **A Gemini API key** -- your sock of freedom (or an OpenAI/Anthropic key if you prefer a different wand)
-
-### Step 1: Retrieve the Enchanted Tome
+A single command to install or upgrade Dobby:
 
 ```bash
-git clone https://github.com/shrimalmadhur/dobby.git
-cd dobby
-```
-
-### Step 2: Gather the Ingredients
-
-Like a proper Potions class, you'll need all your ingredients before you begin:
-
-```bash
-bun install
-```
-
-### Step 3: Whisper Your Secrets
-
-Create a `.env.local` file -- think of it as your personal Marauder's Map, revealing secrets only to you:
-
-```env
-GEMINI_API_KEY=your-gemini-api-key-here
-
-# Optional wand cores
-OPENAI_API_KEY=your-openai-key
-ANTHROPIC_API_KEY=your-anthropic-key
-
-# Optional: cast a Protego charm on the web UI
-DOBBY_PASSWORD=your-password
-```
-
-### Step 4: Cast the Summoning Charm
-
-```bash
-bun run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) -- the Room of Requirement awaits. Dobby is ready to serve.
-
-## Useful Incantations
-
-Every spell in Dobby's repertoire, ready for you to cast:
-
-| Incantation | Effect |
-|-------------|--------|
-| `bun run dev` | *Lumos!* -- Ignite the development server (Turbopack) |
-| `bun run build` | Forge the production build |
-| `bun run start` | Awaken the production server |
-| `bun run tsc --noEmit` | *Revelio!* -- Reveal type errors lurking in the codebase |
-| `bun run lint` | *Scourgify!* -- Clean up code lint |
-| `bun run db:generate` | Inscribe a new migration scroll after schema changes |
-| `bun run db:studio` | Open the Pensieve (Drizzle Studio) to inspect your data |
-| `bun run run-agents` | Dispatch all scheduled autonomous agents |
-| `bun run run-agents --list` | Summon the roll call of configured agents |
-| `bun test` | Put your spells to the test |
-
-## How Dobby Works (The Marauder's Map)
-
-Dobby's magic flows through an **agentic loop** -- like a tireless house-elf who keeps Apparating back to check if there's more work to be done:
-
-```
-  You (the Wizard)
-      |
-      v
-  Chat UI  -->  API Routes  -->  Agent Core (the agentic loop)
-                                    |-- LLM Router (Gemini / OpenAI / Anthropic)
-                                    |-- Built-in Tools (filesystem, time)
-                                    +-- MCP Client Manager --> MCP Servers
-```
-
-1. You send an owl (a message) through the chat UI
-2. Dobby gathers his tools from the enchanted cupboard (built-in + MCP servers)
-3. Dobby consults the Oracle (LLM) for guidance
-4. If the Oracle demands spell-work (tool calls), Dobby executes them and Apparates back for further instructions
-5. When the Oracle speaks its final word, Dobby delivers the answer to you on a silver platter
-
-### Projects & Agents -- The Order of Autonomous Elves
-
-Dobby can also command **autonomous agents** that work on a schedule -- enchanted servants carrying out tasks while you slumber in Gryffindor Tower:
-
-- **Projects** are like Hogwarts Houses -- containers that organize your agents by purpose
-- **Agents** belong to projects and each possesses a **soul** (personality prompt), a **skill** (task instructions), a schedule (their magical alarm clock), and optional Telegram owl notifications
-- Managed entirely through the web UI at **Projects** -- no dark magic (command line) required
-
-## Deploying to the Castle (Production)
-
-Dobby can be installed as a system service, standing guard at the gates of Hogwarts even while you sleep.
-
-### One-Command Install (Recommended)
-
-No need to clone the repository -- a single incantation summons Dobby directly:
-
-```bash
-# Install or upgrade -- one spell to rule them all
 curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash
 ```
 
-For the cautious wizard who inspects scrolls before casting:
+To inspect the script before running:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh -o get-dobby.sh
-less get-dobby.sh    # inspect the spell
+less get-dobby.sh
 sudo bash get-dobby.sh
 ```
 
@@ -149,39 +64,162 @@ If you prefer to clone the repository yourself:
 ```bash
 git clone https://github.com/shrimalmadhur/dobby.git
 cd dobby
-
-# First-time installation -- the Sorting Ceremony (requires sudo)
-make install
-
-# Subsequent upgrades -- like getting new school robes each year
-make upgrade
+make install    # requires sudo
 ```
 
-This installs Dobby to `/usr/local/lib/dobby/` and creates a systemd service (Linux) or launchd service (macOS). The Pensieve (production database) lives at `/usr/local/lib/dobby/data/dobby.db` and is preserved across upgrades -- no memories lost.
+This installs Dobby to `/usr/local/lib/dobby/` and registers it as a system service. The production database at `/usr/local/lib/dobby/data/dobby.db` is preserved across upgrades.
 
-Environment variables for production are sealed in `/etc/dobby/env` -- guarded more carefully than a Gringotts vault.
+### Configuration
 
-## Magical Secrets (Environment Variables)
+After installation, edit the environment file at `/etc/dobby/env`:
 
-| Secret | Required | Purpose |
-|--------|----------|---------|
-| `GEMINI_API_KEY` | Yes (if using Gemini) | The sock that frees Dobby to use Gemini |
-| `OPENAI_API_KEY` | No | Alternative wand core -- OpenAI |
-| `ANTHROPIC_API_KEY` | No | Alternative wand core -- Anthropic |
-| `DOBBY_PASSWORD` | No | Protego charm for the web UI |
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `GEMINI_API_KEY` | Yes (if using Gemini) | Google Gemini API key |
+| `OPENAI_API_KEY` | No | OpenAI API key |
+| `ANTHROPIC_API_KEY` | No | Anthropic API key |
+| `DOBBY_PASSWORD` | No | Password to protect the web UI |
 | `DOBBY_API_SECRET` | No | Bearer token for API hooks and scripts |
-| `DATABASE_PATH` | No | Custom Pensieve location (default: `data/dobby.db`) |
+| `DATABASE_PATH` | No | Custom database path (default: `data/dobby.db`) |
 
-## MCP Servers (Extending Dobby's Powers)
+Then restart the service (see [Managing the Service](#managing-the-service) below).
 
-Dobby's abilities grow when you give him new magical items -- MCP servers are like enchanted objects from the Room of Requirement. Each one grants Dobby new powers:
+### Upgrading
+
+Use the same method you used to install:
+
+- **Curl-installed** (no local clone): re-run the curl command -- it is idempotent:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash
+  ```
+- **Clone-installed** (local repo): pull the latest code and run:
+  ```bash
+  cd dobby
+  make upgrade
+  ```
+
+Both paths back up the database, rebuild, and restart the service.
+
+### Managing the Service
+
+The production server runs on **port 7749** and binds to all interfaces (`0.0.0.0`), so it is accessible from the network at `http://<your-server>:7749`. Set `DOBBY_PASSWORD` in `/etc/dobby/env` if the machine is reachable by others.
+
+**Linux (systemd):**
+
+```bash
+sudo systemctl status dobby      # Check status
+sudo systemctl restart dobby     # Restart
+sudo systemctl stop dobby        # Stop
+sudo journalctl -u dobby -f      # Follow logs
+```
+
+**macOS (launchd):**
+
+```bash
+launchctl print gui/$(id -u)/com.dobby.agent                  # Check status
+launchctl kickstart -k gui/$(id -u)/com.dobby.agent            # Restart
+launchctl kill SIGTERM gui/$(id -u)/com.dobby.agent             # Stop
+tail -f /var/log/dobby/dobby.log                                # Follow logs
+```
+
+## Development
+
+For contributors who want to run Dobby locally.
+
+### Prerequisites
+
+- **[Bun](https://bun.sh/)** -- install with `curl -fsSL https://bun.sh/install | bash`
+- A **Gemini API key** (or OpenAI/Anthropic key)
+
+### Setup
+
+```bash
+git clone https://github.com/shrimalmadhur/dobby.git
+cd dobby
+bun install
+```
+
+Create a `.env.local` file:
+
+```env
+GEMINI_API_KEY=your-gemini-api-key-here
+
+# Optional
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+DOBBY_PASSWORD=your-password
+```
+
+Start the dev server:
+
+```bash
+bun run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start development server (Turbopack) |
+| `bun run build` | Create production build |
+| `bun run tsc --noEmit` | Type-check the codebase |
+| `bun run lint` | Lint the codebase |
+| `bun test` | Run tests |
+| `bun run db:generate` | Generate a new migration after schema changes |
+| `bun run db:studio` | Open Drizzle Studio to inspect the database |
+| `bun run run-agents` | Run all scheduled autonomous agents |
+| `bun run run-agents --list` | List configured agents |
+
+## Architecture
+
+Dobby uses an **agentic loop** -- it sends messages to the LLM, executes any requested tool calls, and loops until the LLM produces a final text response.
+
+```
+  User
+    |
+    v
+  Chat UI  -->  API Routes  -->  Agent Core (agentic loop)
+                                    |-- LLM Router (Gemini / OpenAI / Anthropic)
+                                    |-- Built-in Tools (filesystem, time)
+                                    +-- MCP Client Manager --> MCP Servers
+```
+
+1. You send a message through the chat UI
+2. The agent gathers available tools (built-in + MCP servers)
+3. The LLM processes the message and available tools
+4. If the LLM requests tool calls, the agent executes them and loops back for further instructions
+5. When the LLM returns a text response, it is delivered to the user
+
+### Projects & Agents
+
+Dobby supports **autonomous agents** that run on a schedule:
+
+- **Projects** are containers that organize agents by purpose
+- **Agents** belong to projects and have a **soul** (personality prompt), **skill** (task instructions), a cron schedule, and optional Telegram notifications
+- Managed entirely through the web UI under **Projects**
+
+## MCP Servers
+
+Extend Dobby's capabilities by adding MCP (Model Context Protocol) servers:
 
 1. Navigate to **Settings** in the web UI
-2. Add an MCP server -- its command and arguments, like an incantation and wand movement
-3. Dobby will bond with the server and wield its tools in your conversations
+2. Add an MCP server with its command and arguments
+3. Dobby connects to the server and makes its tools available in conversations
 
-*"Dobby can do all sorts of magic, sir!"*
+## Contributing
+
+1. Fork the repository and create a feature branch
+2. Make your changes
+3. Run checks before submitting:
+   ```bash
+   bun run tsc --noEmit
+   bun run lint
+   bun test
+   ```
+4. Open a pull request
 
 ## License
 
-Dobby has no master. Dobby is a free elf.
+Dobby is a free elf.
