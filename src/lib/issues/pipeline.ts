@@ -1382,6 +1382,7 @@ export async function runIssuePipeline(
       await db.update(issues).set({
         status: "completed",
         prUrl,
+        prSummary: prResult.output,
         phaseSessionIds,
         completedAt: new Date(),
         updatedAt: new Date(),

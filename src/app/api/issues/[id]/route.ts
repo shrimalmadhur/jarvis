@@ -45,6 +45,7 @@ export const GET = withErrorHandler(async (
     status: issue.status,
     currentPhase: issue.currentPhase,
     prUrl: issue.prUrl,
+    prSummary: issue.prSummary,
     phaseSessionIds: issue.phaseSessionIds,
     planOutput: issue.planOutput,
     planReview1: issue.planReview1,

@@ -42,6 +42,7 @@ export const POST = withErrorHandler(async (
   if (phase === 3) { clearFields.planReview1 = null; clearFields.planReview2 = null; } // backward compat
   if (phase <= 5) clearFields.codeReview1 = null;
   if (phase <= 6) clearFields.codeReview2 = null;
+  if (phase <= 7) { clearFields.prSummary = null; clearFields.prUrl = null; }
 
   const [updated] = await db
     .update(issues)

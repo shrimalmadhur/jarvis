@@ -43,6 +43,13 @@
       "when": 1774242369329,
       "tag": "0005_brave_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1774379614848,
+      "tag": "0006_magenta_betty_ross",
+      "breakpoints": true
     }
   ]
 }
