@@ -17,7 +17,10 @@ g._issuePoller ??= { running: false, starting: false };
 /**
  * Ensure the Telegram issue poller is running in-process.
  * Safe to call multiple times — only one poller loop will run.
- * Starts lazily on first call (typically from an issues API route).
+ *
+ * Called eagerly from instrumentation.ts on server startup, and also from
+ * API routes as a fallback retry — if the eager start crashes (e.g. DB
+ * not ready), the next API request will re-trigger it.
  */
 export function ensurePollerRunning(): void {
   if (g._issuePoller!.running || g._issuePoller!.starting) return;
