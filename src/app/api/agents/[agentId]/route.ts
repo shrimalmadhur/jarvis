@@ -7,6 +7,8 @@ import { syncCrontab } from "@/lib/cron/sync";
 import { maskToken } from "@/lib/notifications/telegram";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (_request, { params }) => {
   const { agentId } = await params;
 

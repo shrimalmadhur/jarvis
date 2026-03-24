@@ -7,6 +7,8 @@ import { eq, count, desc } from "drizzle-orm";
 import { createRepositorySchema } from "@/lib/validations/repository";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async () => {
   const rows = await db
     .select({

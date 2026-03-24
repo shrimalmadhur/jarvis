@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { maskToken } from "@/lib/notifications/telegram";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (request: Request) => {
   const body = await request.json();
   const { sourceConfigId, targetAgentId } = body;

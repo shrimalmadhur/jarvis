@@ -3,6 +3,8 @@ import { getMCPClientManager } from "@/lib/mcp/client";
 import { BUILTIN_TOOLS } from "@/lib/agent/builtin-tools";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async () => {
   const manager = getMCPClientManager();
   const mcpTools = await manager.listTools();

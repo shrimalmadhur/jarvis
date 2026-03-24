@@ -3,6 +3,8 @@ import { db, mcpServers } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const PATCH = withErrorHandler(async (
   request: Request,
   { params }: { params: Promise<Record<string, string>> }

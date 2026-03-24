@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent/core";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (request) => {
   const body = await request.json();
   const { conversationId, message } = body;

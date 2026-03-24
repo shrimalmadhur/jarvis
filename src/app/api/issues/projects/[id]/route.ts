@@ -7,6 +7,8 @@ import { eq, count, and, isNotNull, isNull } from "drizzle-orm";
 import { updateRepositorySchema } from "@/lib/validations/repository";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (
   _request: Request,
   { params }: { params: Promise<Record<string, string>> }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, renameSync, lstatSync } from "fs";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 const ENV_FILE = "/etc/dobby/env";
 const MAX_VALUE_LENGTH = 1024;
 const MAX_KEY_LENGTH = 128;

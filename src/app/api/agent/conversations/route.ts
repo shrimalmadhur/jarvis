@@ -5,6 +5,8 @@ import {
 } from "@/lib/agent/conversation-store";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async () => {
   const convos = await listConversations();
   return NextResponse.json(convos);

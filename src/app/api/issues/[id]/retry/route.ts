@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { PHASE_STATUS_MAP } from "@/lib/issues/types";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (
   _request: Request,
   { params }: { params: Promise<Record<string, string>> }

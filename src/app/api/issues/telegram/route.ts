@@ -7,6 +7,8 @@ import { ensurePollerRunning } from "@/lib/issues/poller-manager";
 import { isValidBotToken } from "@/lib/telegram/api";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 const CHANNEL = "telegram-issues";
 
 export const GET = withErrorHandler(async () => {

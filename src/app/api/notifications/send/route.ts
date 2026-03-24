@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { notifyConversationComplete } from "@/lib/notifications/telegram";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 // POST - send a Telegram notification from an external caller (e.g. Claude Code Stop hook)
 export const POST = withErrorHandler(async (request: Request) => {
   const { title, message, changes } = await request.json();

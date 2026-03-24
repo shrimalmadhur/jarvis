@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db, mcpServers } from "@/lib/db";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async () => {
   const servers = await db.query.mcpServers.findMany({
     orderBy: [mcpServers.createdAt],

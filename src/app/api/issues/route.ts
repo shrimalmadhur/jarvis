@@ -6,6 +6,8 @@ import { ensurePollerRunning } from "@/lib/issues/poller-manager";
 import { createIssueSchema } from "@/lib/validations/issue";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (request: Request) => {
   // Start the in-process Telegram poller on first access (lazy init)
   ensurePollerRunning();

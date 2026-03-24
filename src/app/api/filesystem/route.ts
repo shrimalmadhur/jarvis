@@ -4,6 +4,8 @@ import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const rawPath = searchParams.get("path") || homedir();

@@ -1,8 +1,9 @@
 export async function register() {
-  // Guard: only run in the bun server runtime. Next.js build runs under
-  // Node.js where bun:sqlite is unavailable — the dynamic import below
-  // would eventually pull in the DB module and crash.
-  if (!process.versions.bun) return;
+  // Only run in the Node.js server runtime (which is Bun in production).
+  // Skip in Edge runtime and during builds where bun:sqlite is unavailable.
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // globalThis.process may not exist in Edge runtime (guarded above)
+  if (!globalThis.process?.versions?.bun) return;
 
   const { ensurePollerRunning } = await import("@/lib/issues/poller-manager");
   ensurePollerRunning();

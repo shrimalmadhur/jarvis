@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { updateProjectSchema } from "@/lib/validations/project";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (_request, { params }) => {
   const { id } = await params;
 

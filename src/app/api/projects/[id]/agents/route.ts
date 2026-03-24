@@ -7,6 +7,8 @@ import { cronToHuman } from "@/lib/utils/cron";
 import { syncCrontab } from "@/lib/cron/sync";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (_request, { params }) => {
   const { id } = await params;
 

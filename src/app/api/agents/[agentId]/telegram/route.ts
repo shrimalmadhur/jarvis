@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { maskToken } from "@/lib/notifications/telegram";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 function channelKey(agentId: string) {
   return `telegram-agent:${agentId}`;
 }

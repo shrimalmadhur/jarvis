@@ -4,6 +4,8 @@ import { agentRuns } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const GET = withErrorHandler(async (request, { params }) => {
   const { agentId } = await params;
   const { searchParams } = new URL(request.url);

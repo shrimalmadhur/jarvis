@@ -5,6 +5,8 @@ import { notificationConfigs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 export const POST = withErrorHandler(async (request, { params }) => {
   const { agentId } = await params;
 

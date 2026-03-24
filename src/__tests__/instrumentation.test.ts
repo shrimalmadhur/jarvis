@@ -2,9 +2,13 @@ import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 
 describe("instrumentation register()", () => {
   let originalBun: string | undefined;
+  let originalNextRuntime: string | undefined;
 
   beforeEach(() => {
     originalBun = process.versions.bun;
+    originalNextRuntime = process.env.NEXT_RUNTIME;
+    // Simulate the Next.js Node.js server runtime
+    process.env.NEXT_RUNTIME = "nodejs";
     // Reset the globalThis poller state so ensurePollerRunning is callable
     const g = globalThis as unknown as { _issuePoller?: { running: boolean; starting: boolean } };
     g._issuePoller = { running: false, starting: false };
@@ -17,6 +21,12 @@ describe("instrumentation register()", () => {
       writable: true,
       configurable: true,
     });
+    // Restore NEXT_RUNTIME
+    if (originalNextRuntime === undefined) {
+      delete process.env.NEXT_RUNTIME;
+    } else {
+      process.env.NEXT_RUNTIME = originalNextRuntime;
+    }
   });
 
   test("calls ensurePollerRunning in bun runtime", async () => {

@@ -8,6 +8,8 @@ import {
 import type { AgentSession } from "@/lib/claude/types";
 import { withErrorHandler } from "@/lib/api/utils";
 
+export const runtime = "nodejs";
+
 let lastCleanupAt = 0;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 

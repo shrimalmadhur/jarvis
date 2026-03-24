@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 
+export const runtime = "nodejs";
+
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 let activeProcesses = 0;
 const MAX_CONCURRENT = 3;
