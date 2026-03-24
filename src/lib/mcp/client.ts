@@ -6,6 +6,7 @@ interface ConnectedServer {
   client: Client;
   transport: StdioClientTransport;
   config: MCPServerConfig;
+  toolCache: MCPToolDefinition[] | null;
 }
 
 /**
@@ -36,7 +37,7 @@ export class MCPClientManager {
 
     await client.connect(transport, { timeout: 120_000 });
 
-    this.servers.set(config.name, { client, transport, config });
+    this.servers.set(config.name, { client, transport, config, toolCache: null });
     console.log(`Connected to MCP server: ${config.name}`);
   }
 
@@ -61,6 +62,23 @@ export class MCPClientManager {
   }
 
   /**
+   * List tools for a single server, using cache when available.
+   */
+  private async listServerTools(serverName: string, server: ConnectedServer): Promise<MCPToolDefinition[]> {
+    if (server.toolCache) return server.toolCache;
+
+    const result = await server.client.listTools();
+    const tools = result.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description || "",
+      inputSchema: tool.inputSchema as Record<string, unknown>,
+      serverName,
+    }));
+    server.toolCache = tools;
+    return tools;
+  }
+
+  /**
    * List all tools from all connected servers.
    */
   async listTools(): Promise<MCPToolDefinition[]> {
@@ -68,15 +86,8 @@ export class MCPClientManager {
 
     for (const [serverName, server] of this.servers) {
       try {
-        const result = await server.client.listTools();
-        for (const tool of result.tools) {
-          allTools.push({
-            name: tool.name,
-            description: tool.description || "",
-            inputSchema: tool.inputSchema as Record<string, unknown>,
-            serverName,
-          });
-        }
+        const tools = await this.listServerTools(serverName, server);
+        allTools.push(...tools);
       } catch (error) {
         console.error(`Error listing tools from ${serverName}:`, error);
       }
@@ -92,23 +103,21 @@ export class MCPClientManager {
     toolName: string,
     args: Record<string, unknown>
   ): Promise<MCPToolResult> {
-    // Find which server has this tool
-    for (const [, server] of this.servers) {
+    // Find which server has this tool using cached tool lists
+    for (const [serverName, server] of this.servers) {
       try {
-        const { tools } = await server.client.listTools();
-        const hasTool = tools.some((t) => t.name === toolName);
+        const tools = await this.listServerTools(serverName, server);
+        if (!tools.some((t) => t.name === toolName)) continue;
 
-        if (hasTool) {
-          const result = await server.client.callTool({
-            name: toolName,
-            arguments: args,
-          });
+        const result = await server.client.callTool({
+          name: toolName,
+          arguments: args,
+        });
 
-          return {
-            content: (result.content as MCPToolResult["content"]) || [],
-            isError: result.isError as boolean | undefined,
-          };
-        }
+        return {
+          content: (result.content as MCPToolResult["content"]) || [],
+          isError: result.isError as boolean | undefined,
+        };
       } catch (error) {
         console.error(
           `Error calling tool ${toolName} on ${server.config.name}:`,

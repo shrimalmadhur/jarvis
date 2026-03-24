@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getVersion } from "@/lib/version";
+import { useTheme } from "@/lib/hooks/use-theme";
 
 const navItems = [
   { href: "/chat", label: "Owl Post", icon: MessageSquare },
@@ -36,26 +36,7 @@ export function TopNav({ onNewChat }: TopNavProps) {
   const isOnChat =
     pathname === "/chat" || pathname.startsWith("/chat/");
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-
-  useEffect(() => {
-    const saved = localStorage.getItem("dobby-theme");
-    if (saved === "light") {
-      setTheme("light");
-      document.documentElement.classList.add("light");
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("dobby-theme", next);
-    if (next === "light") {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
-  };
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <nav className="flex h-14 shrink-0 items-center border-b border-border bg-surface/80 backdrop-blur-sm px-6">

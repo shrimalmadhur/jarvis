@@ -13,11 +13,11 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(request: LLMRequest): Promise<LLMResponse> {
-    // Extract system message
-    const systemMessages = request.messages.filter((m) => m.role === "system");
-    const system = systemMessages.map((m) => m.content || "").join("\n");
+    const system = request.messages
+      .filter((m) => m.role === "system")
+      .map((m) => m.content || "")
+      .join("\n");
 
-    // Convert non-system messages
     const messages = this.convertMessages(
       request.messages.filter((m) => m.role !== "system")
     );
@@ -38,11 +38,13 @@ export class AnthropicProvider implements LLMProvider {
       temperature: request.temperature ?? 0.7,
     });
 
-    // Check for tool use
-    const toolUseBlocks = response.content.filter(
-      (b) => b.type === "tool_use"
-    );
+    const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
     const textBlocks = response.content.filter((b) => b.type === "text");
+    const text = textBlocks.map((b) => b.text).join("");
+    const usage = {
+      promptTokens: response.usage.input_tokens,
+      completionTokens: response.usage.output_tokens,
+    };
 
     if (toolUseBlocks.length > 0) {
       const toolCalls: LLMToolCall[] = toolUseBlocks.map((b) => ({
@@ -54,31 +56,17 @@ export class AnthropicProvider implements LLMProvider {
         },
       }));
 
-      const text = textBlocks.map((b) => b.text).join("");
-
       return {
-        message: {
-          role: "assistant",
-          content: text || null,
-          toolCalls,
-        },
-        usage: {
-          promptTokens: response.usage.input_tokens,
-          completionTokens: response.usage.output_tokens,
-        },
+        message: { role: "assistant", content: text || null, toolCalls },
+        usage,
         model: response.model,
         finishReason: "tool_calls",
       };
     }
 
-    const text = textBlocks.map((b) => b.text).join("");
-
     return {
       message: { role: "assistant", content: text },
-      usage: {
-        promptTokens: response.usage.input_tokens,
-        completionTokens: response.usage.output_tokens,
-      },
+      usage,
       model: response.model,
       finishReason: "stop",
     };

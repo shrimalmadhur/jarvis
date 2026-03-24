@@ -7,7 +7,7 @@ import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 import { getSetting, setSetting } from "@/lib/db/app-settings";
-import { sendTelegramMessageWithId, sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
+import { sendTelegramMessageWithId, sendTelegramMessage, escapeHtml, TELEGRAM_SAFE_MSG_LEN } from "@/lib/notifications/telegram";
 import type { IssuesTelegramConfig, PipelinePhaseResult, IssueStatus } from "./types";
 import {
   PHASE_STATUS_MAP, MAX_PLAN_ITERATIONS, MAX_CODE_REVIEW_ITERATIONS,
@@ -292,8 +292,8 @@ async function handleQuestions(
   questions: string,
   config: IssuesTelegramConfig
 ): Promise<boolean> {
-  const truncatedQ = questions.length > 3800
-    ? questions.substring(0, 3800) + "..."
+  const truncatedQ = questions.length > TELEGRAM_SAFE_MSG_LEN
+    ? questions.substring(0, TELEGRAM_SAFE_MSG_LEN) + "..."
     : questions;
 
   // Capture time BEFORE sending so we don't miss fast replies

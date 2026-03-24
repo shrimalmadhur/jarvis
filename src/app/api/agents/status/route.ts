@@ -6,11 +6,12 @@ import {
   cleanupOldSessions,
 } from "@/lib/claude/session-store";
 import type { AgentSession } from "@/lib/claude/types";
+import { withErrorHandler } from "@/lib/api/utils";
 
 let lastCleanupAt = 0;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-export async function GET() {
+export const GET = withErrorHandler(async () => {
   try {
     const status = await scanSessions();
 
@@ -59,25 +60,17 @@ export async function GET() {
     }
   } catch (error) {
     // If live scanning fails entirely, serve from DB
-    try {
-      const historical = loadHistoricalSessions();
-      return NextResponse.json({
-        sessions: historical,
-        summary: {
-          activeCount: 0,
-          idleCount: 0,
-          completedCount: historical.length,
-          totalTokensToday: 0,
-          totalSessionsToday: 0,
-        },
-        scannedAt: new Date().toISOString(),
-      });
-    } catch {
-      console.error("Error scanning agent sessions:", error);
-      return NextResponse.json(
-        { error: "Failed to scan agent sessions" },
-        { status: 500 }
-      );
-    }
+    const historical = loadHistoricalSessions();
+    return NextResponse.json({
+      sessions: historical,
+      summary: {
+        activeCount: 0,
+        idleCount: 0,
+        completedCount: historical.length,
+        totalTokensToday: 0,
+        totalSessionsToday: 0,
+      },
+      scannedAt: new Date().toISOString(),
+    });
   }
-}
+});

@@ -2,6 +2,7 @@ import {
   sendTelegramMessage,
   markdownToTelegramHtml,
   escapeHtml,
+  TELEGRAM_SAFE_MSG_LEN,
 } from "@/lib/notifications/telegram";
 import { db } from "@/lib/db";
 import { notificationConfigs } from "@/lib/db/schema";
@@ -73,7 +74,7 @@ export async function sendAgentResult(
   agentName: string,
   result: RunResult
 ): Promise<void> {
-  const maxLen = 3800;
+  const maxLen = TELEGRAM_SAFE_MSG_LEN;
   const trimmed =
     result.output.length > maxLen
       ? result.output.substring(0, maxLen) + "..."
@@ -101,7 +102,7 @@ export async function sendAgentError(
   result: RunResult
 ): Promise<void> {
   const errorDetail = result.error || "Unknown error";
-  const maxLen = 3800;
+  const maxLen = TELEGRAM_SAFE_MSG_LEN;
   const trimmedError =
     errorDetail.length > maxLen
       ? errorDetail.substring(0, maxLen) + "..."

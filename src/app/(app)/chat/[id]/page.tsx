@@ -1,25 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChatMessagesList } from "@/components/chat/chat-messages-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { AlertTriangle } from "lucide-react";
-
-interface Message {
-  id?: string;
-  role: "user" | "assistant" | "tool";
-  content: string | null;
-  modelUsed?: string | null;
-}
+import { useChatSend } from "@/lib/hooks/use-chat-send";
 
 export default function ConversationPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { messages, setMessages, isLoading, handleSend } = useChatSend({
+    conversationId: params.id,
+  });
 
   useEffect(() => {
     async function load() {
@@ -42,58 +38,7 @@ export default function ConversationPage() {
       }
     }
     load();
-  }, [params.id]);
-
-  const handleSend = useCallback(
-    async (text: string) => {
-      const userMessage: Message = { role: "user", content: text };
-      setMessages((prev) => [...prev, userMessage]);
-      setIsLoading(true);
-
-      try {
-        const res = await fetch("/api/agent/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId: params.id,
-            message: text,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: data.message,
-              modelUsed: data.model,
-            },
-          ]);
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: "Sorry, something went wrong. Please try again.",
-            },
-          ]);
-        }
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "Failed to connect. Please check your connection.",
-          },
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [params.id]
-  );
+  }, [params.id, setMessages]);
 
   if (initialLoad) {
     return (

@@ -3,30 +3,15 @@ import {
   listConversations,
   createConversation,
 } from "@/lib/agent/conversation-store";
+import { withErrorHandler } from "@/lib/api/utils";
 
-export async function GET() {
-  try {
-    const convos = await listConversations();
-    return NextResponse.json(convos);
-  } catch (error) {
-    console.error("Error listing conversations:", error);
-    return NextResponse.json(
-      { error: "Failed to list conversations" },
-      { status: 500 }
-    );
-  }
-}
+export const GET = withErrorHandler(async () => {
+  const convos = await listConversations();
+  return NextResponse.json(convos);
+});
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const conv = await createConversation(body.title);
-    return NextResponse.json(conv);
-  } catch (error) {
-    console.error("Error creating conversation:", error);
-    return NextResponse.json(
-      { error: "Failed to create conversation" },
-      { status: 500 }
-    );
-  }
-}
+export const POST = withErrorHandler(async (request) => {
+  const body = await request.json();
+  const conv = await createConversation(body.title);
+  return NextResponse.json(conv);
+});

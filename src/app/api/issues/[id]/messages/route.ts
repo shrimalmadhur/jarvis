@@ -2,30 +2,26 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { issueMessages } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { withErrorHandler } from "@/lib/api/utils";
 
-export async function GET(
+export const GET = withErrorHandler(async (
   _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  { params }: { params: Promise<Record<string, string>> }
+) => {
   const { id } = await params;
 
-  try {
-    const messages = await db
-      .select()
-      .from(issueMessages)
-      .where(eq(issueMessages.issueId, id))
-      .orderBy(issueMessages.createdAt);
+  const messages = await db
+    .select()
+    .from(issueMessages)
+    .where(eq(issueMessages.issueId, id))
+    .orderBy(issueMessages.createdAt);
 
-    return NextResponse.json({
-      messages: messages.map((m) => ({
-        id: m.id,
-        direction: m.direction,
-        message: m.message,
-        createdAt: m.createdAt.toISOString(),
-      })),
-    });
-  } catch (error) {
-    console.error("Error loading messages:", error);
-    return NextResponse.json({ error: "Failed to load messages" }, { status: 500 });
-  }
-}
+  return NextResponse.json({
+    messages: messages.map((m) => ({
+      id: m.id,
+      direction: m.direction,
+      message: m.message,
+      createdAt: m.createdAt.toISOString(),
+    })),
+  });
+});

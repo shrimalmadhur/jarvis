@@ -6,14 +6,12 @@ import { agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAgentWorkspaceDir } from "@/lib/runner/agent-runner";
 import { agentRowToDefinition } from "@/lib/runner/db-config-loader";
+import { withErrorHandler } from "@/lib/api/utils";
 
 /**
  * GET /api/agents/:agentId/memories - Read an agent's memory file
  */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ agentId: string }> }
-) {
+export const GET = withErrorHandler(async (_request, { params }) => {
   const { agentId } = await params;
 
   const rows = await db
@@ -46,15 +44,12 @@ export async function GET(
     content,
     exists,
   });
-}
+});
 
 /**
  * DELETE /api/agents/:agentId/memories - Clear an agent's memory file
  */
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ agentId: string }> }
-) {
+export const DELETE = withErrorHandler(async (_request, { params }) => {
   const { agentId } = await params;
 
   const rows = await db
@@ -76,4 +71,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ cleared: true });
-}
+});

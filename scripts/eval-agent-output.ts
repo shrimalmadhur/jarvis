@@ -6,17 +6,8 @@
  *   bun run --tsconfig tsconfig.runner.json scripts/eval-agent-output.ts [agent-name]
  */
 
-import dotenv from "dotenv";
-import fs from "node:fs";
-
-// Load env
-if (fs.existsSync(".env.local")) {
-  dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync("/etc/dobby/env")) {
-  dotenv.config({ path: "/etc/dobby/env" });
-} else if (fs.existsSync(".env")) {
-  dotenv.config({ path: ".env" });
-}
+import { loadEnv } from "./lib/load-env";
+loadEnv();
 
 import { loadAgentDefinitionsFromDB } from "../src/lib/runner/db-config-loader";
 import { runAgentTask, getAgentWorkspaceDir } from "../src/lib/runner/agent-runner";

@@ -7,11 +7,9 @@ import {
   persistSessionDetail,
   loadSessionDetailFromDB,
 } from "@/lib/claude/session-store";
+import { withErrorHandler } from "@/lib/api/utils";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withErrorHandler(async (request, { params }) => {
   const { id: sessionId } = await params;
   const { searchParams } = new URL(request.url);
   const projectDir = searchParams.get("project");
@@ -52,19 +50,10 @@ export async function GET(
     );
   } catch (error) {
     // Disk read failed — try DB
-    try {
-      const fromDB = loadSessionDetailFromDB(sessionId, projectDir, subagentId);
-      if (fromDB) {
-        return NextResponse.json(fromDB);
-      }
-    } catch {
-      // DB also failed
+    const fromDB = loadSessionDetailFromDB(sessionId, projectDir, subagentId);
+    if (fromDB) {
+      return NextResponse.json(fromDB);
     }
-
-    console.error("Error reading session detail:", error);
-    return NextResponse.json(
-      { error: "Failed to read session detail" },
-      { status: 500 }
-    );
+    throw error;
   }
-}
+});

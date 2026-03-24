@@ -5,19 +5,11 @@ import type {
   AgentSession,
   AgentStatusResponse,
 } from "./types";
-import { CLAUDE_DIR, PROJECTS_DIR, ACTIVE_MS, IDLE_MS } from "./constants";
+import { CLAUDE_DIR, PROJECTS_DIR } from "./constants";
 import { shortenModel, extractProjectName, decodeProjectDir } from "./utils";
+import { getSessionStatus } from "./session-utils";
 
 const TAIL_BYTES = 16_384;
-const COMPLETED_MS = 60 * 60 * 1000;
-
-function getStatus(mtimeMs: number): "active" | "idle" | "completed" | null {
-  const age = Date.now() - mtimeMs;
-  if (age < ACTIVE_MS) return "active";
-  if (age < IDLE_MS) return "idle";
-  if (age < COMPLETED_MS) return "completed";
-  return null;
-}
 
 async function readTail(filePath: string): Promise<ClaudeSessionEntry[]> {
   const handle = await fs.open(filePath, "r");
@@ -230,7 +222,7 @@ export async function scanSessions(): Promise<AgentStatusResponse> {
       jsonlFiles.map(async (file) => {
         const filePath = path.join(projPath, file);
         const fileStat = await fs.stat(filePath);
-        const status = getStatus(fileStat.mtimeMs);
+        const status = getSessionStatus(fileStat.mtimeMs);
         if (!status) return null;
 
         const entries = await readTail(filePath);

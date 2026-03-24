@@ -7,6 +7,12 @@ import { eq } from "drizzle-orm";
 // Reuse the IPv4 agent pattern from src/lib/db/index.ts
 const ipv4Agent = new https.Agent({ family: 4 });
 
+/** Telegram's hard limit for message length */
+export const TELEGRAM_MAX_MSG_LEN = 4096;
+
+/** Safe limit with overhead budget for formatting/metadata */
+export const TELEGRAM_SAFE_MSG_LEN = 3800;
+
 /**
  * Mask a secret token for display: show first 4 and last 4 chars.
  */
@@ -94,7 +100,7 @@ export async function sendTelegramMessageWithId(
   config: TelegramConfig,
   text: string
 ): Promise<number> {
-  const truncated = text.length > 4096 ? text.substring(0, 4093) + "..." : text;
+  const truncated = text.length > TELEGRAM_MAX_MSG_LEN ? text.substring(0, TELEGRAM_MAX_MSG_LEN - 3) + "..." : text;
   const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
 
   const response = await nodeFetch(url, {

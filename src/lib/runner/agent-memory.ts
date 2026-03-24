@@ -149,6 +149,22 @@ export function parseSubAgentOutput(
   return { memory: trimmed };
 }
 
+/** Append archive content, respecting the size cap */
+function writeArchive(workspaceDir: string, archive: string): void {
+  const archivePath = join(workspaceDir, ARCHIVE_FILE);
+  if (existsSync(archivePath)) {
+    try {
+      if (statSync(archivePath).size > MAX_ARCHIVE_BYTES) {
+        console.warn("[memory sub-agent] archive exceeds 100KB, skipping append");
+        return;
+      }
+    } catch { /* stat failed, try to append anyway */ }
+    appendFileSync(archivePath, "\n" + archive + "\n", "utf-8");
+  } else {
+    appendFileSync(archivePath, archive + "\n", "utf-8");
+  }
+}
+
 /**
  * Spawn a memory sub-agent to update the agent's memory.md after a successful run.
  * This is a separate Claude CLI invocation with no tools — pure text generation.
@@ -277,41 +293,28 @@ export async function updateMemoryAfterRun(opts: {
 
     proc.on("close", (code: number | null) => {
       clearTimeout(timer);
-      if (settled) return; // Don't write after timeout or error — promise already settled
+      if (settled) return;
       settled = true;
 
-      const trimmed = output.trim();
-
-      if (code === 0 && trimmed) {
-        try {
-          const parsed = parseSubAgentOutput(trimmed, needsCompaction);
-
-          // Archive first — if this fails, uncompacted memory is still intact
-          if (parsed.archive) {
-            const archivePath = join(workspaceDir, ARCHIVE_FILE);
-            let skipArchive = false;
-            if (existsSync(archivePath)) {
-              try {
-                if (statSync(archivePath).size > MAX_ARCHIVE_BYTES) {
-                  console.warn("[memory sub-agent] archive exceeds 100KB, skipping append");
-                  skipArchive = true;
-                }
-              } catch { /* stat failed, try to append anyway */ }
-            }
-            if (!skipArchive) {
-              const prefix = existsSync(archivePath) ? "\n" : "";
-              appendFileSync(archivePath, prefix + parsed.archive + "\n", "utf-8");
-            }
-          }
-
-          if (parsed.memory) {
-            writeFileSync(join(workspaceDir, MEMORY_FILE), parsed.memory + "\n", "utf-8");
-          }
-        } catch (err) {
-          console.warn("[memory sub-agent] failed to write memory.md:", err);
-        }
-      } else if (code !== 0) {
+      if (code !== 0) {
         console.warn(`[memory sub-agent] exited with code ${code}, skipping memory update`);
+        resolve();
+        return;
+      }
+
+      const trimmed = output.trim();
+      if (!trimmed) { resolve(); return; }
+
+      try {
+        const parsed = parseSubAgentOutput(trimmed, needsCompaction);
+        if (parsed.archive) {
+          writeArchive(workspaceDir, parsed.archive);
+        }
+        if (parsed.memory) {
+          writeFileSync(join(workspaceDir, MEMORY_FILE), parsed.memory + "\n", "utf-8");
+        }
+      } catch (err) {
+        console.warn("[memory sub-agent] failed to write memory.md:", err);
       }
 
       resolve();

@@ -63,8 +63,11 @@ export class OpenAIProvider implements LLMProvider {
       max_tokens: request.maxTokens ?? 4096,
     });
 
-    const choice = response.choices[0];
-    const message = choice.message;
+    const message = response.choices[0].message;
+    const usage = {
+      promptTokens: response.usage?.prompt_tokens || 0,
+      completionTokens: response.usage?.completion_tokens || 0,
+    };
 
     if (message.tool_calls && message.tool_calls.length > 0) {
       const toolCalls: LLMToolCall[] = message.tool_calls
@@ -80,10 +83,7 @@ export class OpenAIProvider implements LLMProvider {
 
       return {
         message: { role: "assistant", content: null, toolCalls },
-        usage: {
-          promptTokens: response.usage?.prompt_tokens || 0,
-          completionTokens: response.usage?.completion_tokens || 0,
-        },
+        usage,
         model: response.model,
         finishReason: "tool_calls",
       };
@@ -91,10 +91,7 @@ export class OpenAIProvider implements LLMProvider {
 
     return {
       message: { role: "assistant", content: message.content || "" },
-      usage: {
-        promptTokens: response.usage?.prompt_tokens || 0,
-        completionTokens: response.usage?.completion_tokens || 0,
-      },
+      usage,
       model: response.model,
       finishReason: "stop",
     };

@@ -1,14 +1,5 @@
-import dotenv from "dotenv";
-import fs from "node:fs";
-
-// Load env: prefer .env.local (dev), then /etc/dobby/env (server), then .env
-if (fs.existsSync(".env.local")) {
-  dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync("/etc/dobby/env")) {
-  dotenv.config({ path: "/etc/dobby/env" });
-} else if (fs.existsSync(".env")) {
-  dotenv.config({ path: ".env" });
-}
+import { loadEnv } from "./lib/load-env";
+loadEnv();
 
 import { getIssuesTelegramConfig } from "../src/lib/issues/telegram-poller";
 import { getOffset, runPollerIteration, clearAllLocks } from "../src/lib/issues/poller-manager";

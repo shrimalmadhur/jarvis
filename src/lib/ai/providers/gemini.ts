@@ -47,12 +47,14 @@ export class GeminiProvider implements LLMProvider {
     });
 
     const response = result.response;
-    const candidate = response.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
+    const parts = response.candidates?.[0]?.content?.parts || [];
+    const usage = {
+      promptTokens: response.usageMetadata?.promptTokenCount || 0,
+      completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
+    };
 
     // Check for function calls
     const functionCalls = parts.filter((p) => p.functionCall);
-    const textParts = parts.filter((p) => p.text);
 
     if (functionCalls.length > 0) {
       const toolCalls: LLMToolCall[] = functionCalls.map((p, i) => ({
@@ -73,23 +75,17 @@ export class GeminiProvider implements LLMProvider {
           // so we can replay them verbatim in multi-turn conversations.
           _providerParts: parts as unknown[],
         },
-        usage: {
-          promptTokens: response.usageMetadata?.promptTokenCount || 0,
-          completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
-        },
+        usage,
         model: this.modelName,
         finishReason: "tool_calls",
       };
     }
 
-    const text = textParts.map((p) => p.text).join("");
+    const text = parts.filter((p) => p.text).map((p) => p.text).join("");
 
     return {
       message: { role: "assistant", content: text },
-      usage: {
-        promptTokens: response.usageMetadata?.promptTokenCount || 0,
-        completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
-      },
+      usage,
       model: this.modelName,
       finishReason: "stop",
     };

@@ -1,14 +1,5 @@
-import dotenv from "dotenv";
-import fs from "node:fs";
-
-// Load env: prefer .env.local (dev), then /etc/dobby/env (server), then .env
-if (fs.existsSync(".env.local")) {
-  dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync("/etc/dobby/env")) {
-  dotenv.config({ path: "/etc/dobby/env" });
-} else if (fs.existsSync(".env")) {
-  dotenv.config({ path: ".env" });
-}
+import { loadEnv } from "./lib/load-env";
+loadEnv();
 import { loadAgentDefinitionsFromDB, loadAgentDefinitionById } from "../src/lib/runner/db-config-loader";
 import { runAgentTask } from "../src/lib/runner/agent-runner";
 import { sendAgentResult, sendAgentError, getAgentTelegramConfig } from "../src/lib/runner/telegram-sender";

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, renameSync, lstatSync } from "fs";
+import { withErrorHandler } from "@/lib/api/utils";
 
 const ENV_FILE = "/etc/dobby/env";
 const MAX_VALUE_LENGTH = 1024;
@@ -133,82 +134,72 @@ function updateEnvFile(updates: Record<string, string>): void {
   renameSync(tmpFile, ENV_FILE);
 }
 
-export async function GET(request: Request) {
-  try {
-    if (!isRegularFile(ENV_FILE)) {
-      return NextResponse.json({ exists: false, keys: {} });
-    }
-    const keys = parseEnvFile();
-
-    const url = new URL(request.url);
-    const unmaskKey = url.searchParams.get("unmask");
-
-    const result: Record<string, { set: boolean; masked: string; value?: string }> = {};
-    for (const key of ALLOWED_KEYS) {
-      const value = keys[key] || "";
-      result[key] = {
-        set: value.length > 0,
-        masked: value.length > 0 ? "********" : "",
-      };
-      if (unmaskKey === key && value.length > 0) {
-        result[key].value = value;
-      }
-    }
-    return NextResponse.json({ exists: true, keys: result });
-  } catch (error) {
-    console.error("Error reading env file:", error);
-    return NextResponse.json({ error: "Failed to read configuration" }, { status: 500 });
+export const GET = withErrorHandler(async (request: Request) => {
+  if (!isRegularFile(ENV_FILE)) {
+    return NextResponse.json({ exists: false, keys: {} });
   }
-}
+  const keys = parseEnvFile();
 
-export async function PATCH(request: Request) {
-  try {
-    if (!isRegularFile(ENV_FILE)) {
-      return NextResponse.json({ error: "Configuration file not found" }, { status: 404 });
+  const url = new URL(request.url);
+  const unmaskKey = url.searchParams.get("unmask");
+
+  const result: Record<string, { set: boolean; masked: string; value?: string }> = {};
+  for (const key of ALLOWED_KEYS) {
+    const value = keys[key] || "";
+    result[key] = {
+      set: value.length > 0,
+      masked: value.length > 0 ? "********" : "",
+    };
+    if (unmaskKey === key && value.length > 0) {
+      result[key].value = value;
     }
-
-    const body = await request.json();
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
-    }
-
-    const updates: Record<string, string> = {};
-    for (const [key, value] of Object.entries(body)) {
-      if (!VALID_KEY_RE.test(key)) {
-        return NextResponse.json({ error: `"${key}" is not a valid env variable name (use UPPER_SNAKE_CASE)` }, { status: 400 });
-      }
-      if (key.length > MAX_KEY_LENGTH) {
-        return NextResponse.json({ error: `Key "${key}" exceeds maximum length` }, { status: 400 });
-      }
-      if (typeof value !== "string") {
-        return NextResponse.json({ error: `Value for "${key}" must be a string` }, { status: 400 });
-      }
-      // Allow DELETE_SENTINEL or empty string for deletion
-      if (value === DELETE_SENTINEL || value === "") {
-        // For allowed keys, treat as deletion
-        if (!isAllowedKey(key)) {
-          // Auto-add to allowlist for custom keys so they can be deleted
-          ALLOWED_KEYS.add(key);
-        }
-        updates[key] = DELETE_SENTINEL;
-        continue;
-      }
-      if (value.length > MAX_VALUE_LENGTH) {
-        return NextResponse.json({ error: `Value for "${key}" exceeds maximum length` }, { status: 400 });
-      }
-      if (/[\n\r\0]/.test(value)) {
-        return NextResponse.json({ error: `Value for "${key}" contains invalid characters` }, { status: 400 });
-      }
-      // Auto-add custom keys to the allowlist
-      ALLOWED_KEYS.add(key);
-      updates[key] = value;
-    }
-
-    updateEnvFile(updates);
-
-    return NextResponse.json({ success: true, message: "Env file updated. Restart Dobby to apply changes." });
-  } catch (error) {
-    console.error("Error updating env file:", error);
-    return NextResponse.json({ error: "Failed to update configuration" }, { status: 500 });
   }
-}
+  return NextResponse.json({ exists: true, keys: result });
+});
+
+export const PATCH = withErrorHandler(async (request: Request) => {
+  if (!isRegularFile(ENV_FILE)) {
+    return NextResponse.json({ error: "Configuration file not found" }, { status: 404 });
+  }
+
+  const body = await request.json();
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+  }
+
+  const updates: Record<string, string> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!VALID_KEY_RE.test(key)) {
+      return NextResponse.json({ error: `"${key}" is not a valid env variable name (use UPPER_SNAKE_CASE)` }, { status: 400 });
+    }
+    if (key.length > MAX_KEY_LENGTH) {
+      return NextResponse.json({ error: `Key "${key}" exceeds maximum length` }, { status: 400 });
+    }
+    if (typeof value !== "string") {
+      return NextResponse.json({ error: `Value for "${key}" must be a string` }, { status: 400 });
+    }
+    // Allow DELETE_SENTINEL or empty string for deletion
+    if (value === DELETE_SENTINEL || value === "") {
+      // For allowed keys, treat as deletion
+      if (!isAllowedKey(key)) {
+        // Auto-add to allowlist for custom keys so they can be deleted
+        ALLOWED_KEYS.add(key);
+      }
+      updates[key] = DELETE_SENTINEL;
+      continue;
+    }
+    if (value.length > MAX_VALUE_LENGTH) {
+      return NextResponse.json({ error: `Value for "${key}" exceeds maximum length` }, { status: 400 });
+    }
+    if (/[\n\r\0]/.test(value)) {
+      return NextResponse.json({ error: `Value for "${key}" contains invalid characters` }, { status: 400 });
+    }
+    // Auto-add custom keys to the allowlist
+    ALLOWED_KEYS.add(key);
+    updates[key] = value;
+  }
+
+  updateEnvFile(updates);
+
+  return NextResponse.json({ success: true, message: "Env file updated. Restart Dobby to apply changes." });
+});

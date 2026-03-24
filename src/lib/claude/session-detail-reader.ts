@@ -7,20 +7,14 @@ import type {
   SubAgentInfo,
   TaskInfo,
 } from "./types";
-import { PROJECTS_DIR, TASKS_DIR, ACTIVE_MS, IDLE_MS } from "./constants";
+import { PROJECTS_DIR, TASKS_DIR } from "./constants";
 import {
   shortenModel,
   extractProjectName,
   decodeProjectDir,
   parseJsonlEntries,
 } from "./utils";
-
-function getStatus(mtimeMs: number): "active" | "idle" | "completed" {
-  const age = Date.now() - mtimeMs;
-  if (age < ACTIVE_MS) return "active";
-  if (age < IDLE_MS) return "idle";
-  return "completed";
-}
+import { getSessionStatus, aggregateTokensFromEntries, extractMessageUsage } from "./session-utils";
 
 function getContentBlocks(entry: ClaudeSessionEntry) {
   const c = entry.message?.content;
@@ -73,15 +67,7 @@ function buildTimeline(entries: ClaudeSessionEntry[]): TimelineEntry[] {
     const blocks = getContentBlocks(entry);
     const stringContent = typeof entry.message.content === "string" ? entry.message.content : null;
 
-    // Token usage for this message
-    const usage = entry.message.usage
-      ? {
-          inputTokens: entry.message.usage.input_tokens || 0,
-          outputTokens: entry.message.usage.output_tokens || 0,
-          cacheReadTokens: entry.message.usage.cache_read_input_tokens || 0,
-          cacheCreationTokens: entry.message.usage.cache_creation_input_tokens || 0,
-        }
-      : undefined;
+    const usage = extractMessageUsage(entry);
 
     // User message with text content
     if (entry.type === "user" && entry.userType === "external") {
@@ -170,23 +156,11 @@ async function readSubAgents(
 
       let model: string | null = null;
       let messageCount = 0;
-      let inputTokens = 0;
-      let outputTokens = 0;
-      let cacheReadTokens = 0;
-      let cacheCreationTokens = 0;
-
-      // Extract first user message as prompt
       let prompt: string | null = null;
 
       for (const e of entries) {
         if (!model && e.message?.model) model = e.message.model;
         if (e.type === "user" || e.type === "assistant") messageCount++;
-        if (e.message?.usage) {
-          inputTokens += e.message.usage.input_tokens || 0;
-          outputTokens += e.message.usage.output_tokens || 0;
-          cacheReadTokens += e.message.usage.cache_read_input_tokens || 0;
-          cacheCreationTokens += e.message.usage.cache_creation_input_tokens || 0;
-        }
         if (!prompt && e.type === "user") {
           const c = e.message?.content;
           if (typeof c === "string") {
@@ -203,7 +177,7 @@ async function readSubAgents(
         prompt,
         model: model ? shortenModel(model) : null,
         messageCount,
-        tokenUsage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+        tokenUsage: aggregateTokensFromEntries(entries),
       } satisfies SubAgentInfo;
     })
   );
@@ -287,36 +261,25 @@ export async function readSessionDetail(
   let model: string | null = null;
   let gitBranch: string | null = null;
   let cwd: string | null = null;
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cacheReadTokens = 0;
-  let cacheCreationTokens = 0;
 
   for (const e of entries) {
     if (!slug && e.slug) slug = e.slug;
     if (!model && e.message?.model) model = e.message.model;
     if (!gitBranch && e.gitBranch) gitBranch = e.gitBranch;
     if (!cwd && e.cwd) cwd = e.cwd;
-    if (e.message?.usage) {
-      inputTokens += e.message.usage.input_tokens || 0;
-      outputTokens += e.message.usage.output_tokens || 0;
-      cacheReadTokens += e.message.usage.cache_read_input_tokens || 0;
-      cacheCreationTokens += e.message.usage.cache_creation_input_tokens || 0;
-    }
+    if (slug && model && gitBranch && cwd) break;
   }
 
+  const totalTokens = aggregateTokensFromEntries(entries);
   const firstEntry = entries[0];
   const lastEntry = entries[entries.length - 1];
   const projectPath = cwd || decodeProjectDir(projectDir);
-  const status = getStatus(fileStat.mtimeMs);
+  const status = getSessionStatus(fileStat.mtimeMs, null)!;
   const fallbackTime = new Date(fileStat.mtimeMs).toISOString();
 
   const timeline = buildTimeline(entries);
-
-  // Read sub-agents from {sessionId}/subagents/ directory
   const sessionDir = path.join(projPath, sessionId);
   const subAgents = await readSubAgents(sessionDir);
-
   const tasks = await readTasks(sessionId);
 
   return {
@@ -330,7 +293,7 @@ export async function readSessionDetail(
       status,
       created: firstEntry?.timestamp || fallbackTime,
       lastActivity: lastEntry?.timestamp || fallbackTime,
-      totalTokens: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+      totalTokens,
     },
     timeline,
     subAgents,
@@ -369,31 +332,21 @@ export async function readSubAgentDetail(
   let model: string | null = null;
   let gitBranch: string | null = null;
   let cwd: string | null = null;
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cacheReadTokens = 0;
-  let cacheCreationTokens = 0;
 
   for (const e of entries) {
     if (!slug && e.slug) slug = e.slug;
     if (!model && e.message?.model) model = e.message.model;
     if (!gitBranch && e.gitBranch) gitBranch = e.gitBranch;
     if (!cwd && e.cwd) cwd = e.cwd;
-    if (e.message?.usage) {
-      inputTokens += e.message.usage.input_tokens || 0;
-      outputTokens += e.message.usage.output_tokens || 0;
-      cacheReadTokens += e.message.usage.cache_read_input_tokens || 0;
-      cacheCreationTokens += e.message.usage.cache_creation_input_tokens || 0;
-    }
+    if (slug && model && gitBranch && cwd) break;
   }
 
+  const totalTokens = aggregateTokensFromEntries(entries);
   const firstEntry = entries[0];
   const lastEntry = entries[entries.length - 1];
   const projectPath = cwd || decodeProjectDir(projectDir);
-  const status = getStatus(fileStat.mtimeMs);
+  const status = getSessionStatus(fileStat.mtimeMs, null)!;
   const fallbackTime = new Date(fileStat.mtimeMs).toISOString();
-
-  // Sub-agents don't filter out sidechains -- all entries are their own
   const timeline = buildSubAgentTimeline(entries);
 
   return {
@@ -407,7 +360,7 @@ export async function readSubAgentDetail(
       status,
       created: firstEntry?.timestamp || fallbackTime,
       lastActivity: lastEntry?.timestamp || fallbackTime,
-      totalTokens: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+      totalTokens,
     },
     timeline,
     subAgents: [],
@@ -429,14 +382,7 @@ function buildSubAgentTimeline(entries: ClaudeSessionEntry[]): TimelineEntry[] {
     const blocks = getContentBlocks(entry);
     const stringContent = typeof entry.message.content === "string" ? entry.message.content : null;
 
-    const usage = entry.message.usage
-      ? {
-          inputTokens: entry.message.usage.input_tokens || 0,
-          outputTokens: entry.message.usage.output_tokens || 0,
-          cacheReadTokens: entry.message.usage.cache_read_input_tokens || 0,
-          cacheCreationTokens: entry.message.usage.cache_creation_input_tokens || 0,
-        }
-      : undefined;
+    const usage = extractMessageUsage(entry);
 
     // User text message (first message is the prompt)
     if (entry.type === "user" && (entry.userType === "external" || entry.userType === "internal")) {

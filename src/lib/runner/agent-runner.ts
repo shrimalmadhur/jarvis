@@ -6,6 +6,125 @@ import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
 import type { RunEvent } from "./run-events";
 import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, AGENT_OUTPUT_RULES, updateMemoryAfterRun, buildChildEnv, hasWorkspaceArchive } from "./agent-memory";
 
+/** State accumulated while processing JSONL stream events from Claude CLI */
+interface StreamState {
+  resultText: string;
+  assistantTextBlocks: string[];
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  toolUses: ToolUseLog[];
+  pendingTools: Map<string, { name: string; input: string; startTime: number }>;
+}
+
+function createStreamState(): StreamState {
+  return {
+    resultText: "",
+    assistantTextBlocks: [],
+    model: "claude",
+    promptTokens: 0,
+    completionTokens: 0,
+    toolUses: [],
+    pendingTools: new Map(),
+  };
+}
+
+/** Process a single parsed JSONL event from the Claude CLI stream */
+function processStreamEvent(
+  event: Record<string, unknown>,
+  state: StreamState,
+  onEvent?: (event: RunEvent) => void
+): void {
+  if (event.type === "result") {
+    if (event.result) state.resultText = event.result as string;
+    if (event.input_tokens) state.promptTokens = event.input_tokens as number;
+    if (event.output_tokens) state.completionTokens = event.output_tokens as number;
+    if (event.model) state.model = event.model as string;
+    return;
+  }
+
+  if (event.type === "assistant" && (event.message as Record<string, unknown>)?.content) {
+    const msg = event.message as Record<string, unknown>;
+    const content = msg.content;
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === "tool_use") {
+          state.pendingTools.set(block.id, {
+            name: block.name,
+            input: JSON.stringify(block.input || {}),
+            startTime: Date.now(),
+          });
+          onEvent?.({
+            type: "tool_start",
+            timestamp: Date.now(),
+            data: {
+              toolName: block.name,
+              toolInput: JSON.stringify(block.input || {}).substring(0, 2000),
+            },
+          });
+        } else if (block.type === "text" && block.text) {
+          state.assistantTextBlocks.push(block.text);
+          onEvent?.({
+            type: "text",
+            timestamp: Date.now(),
+            data: { text: block.text },
+          });
+        }
+      }
+    }
+    if (msg.model) state.model = msg.model as string;
+    return;
+  }
+
+  if (event.type === "user" && (event.message as Record<string, unknown>)?.content) {
+    const content = (event.message as Record<string, unknown>).content;
+    if (!Array.isArray(content)) return;
+    for (const block of content) {
+      if (block.type !== "tool_result" || !block.tool_use_id) continue;
+      const pending = state.pendingTools.get(block.tool_use_id);
+      if (!pending) continue;
+
+      let outputText: string;
+      if (typeof block.content === "string") {
+        outputText = block.content;
+      } else if (Array.isArray(block.content)) {
+        outputText = block.content.map((c: { text?: string }) => c.text || "").join("");
+      } else {
+        outputText = JSON.stringify(block.content);
+      }
+
+      const toolDurationMs = Date.now() - pending.startTime;
+      state.toolUses.push({
+        toolName: pending.name,
+        toolInput: pending.input.substring(0, 4000),
+        toolOutput: outputText.substring(0, 4000),
+        isError: block.is_error || false,
+        durationMs: toolDurationMs,
+      });
+      onEvent?.({
+        type: "tool_result",
+        timestamp: Date.now(),
+        data: {
+          toolName: pending.name,
+          toolOutput: outputText.substring(0, 2000),
+          isError: block.is_error || false,
+          durationMs: toolDurationMs,
+        },
+      });
+      state.pendingTools.delete(block.tool_use_id);
+    }
+  }
+}
+
+/** Build fallback output from assistant text blocks, capped at maxChars */
+function buildFallbackOutput(blocks: string[], maxChars: number): string {
+  let output = blocks.length > 0 ? blocks.join("\n\n") : "";
+  if (output.length > maxChars) {
+    output = "[earlier output truncated]\n\n" + output.substring(output.length - maxChars);
+  }
+  return output;
+}
+
 /**
  * Build the user message from skill + context.
  */
@@ -125,111 +244,18 @@ export async function runAgentTask(
     proc.stdin!.end();
 
     let buffer = "";
-    let resultText = "";
-    const assistantTextBlocks: string[] = [];
-    let model = "claude";
-    let promptTokens = 0;
-    let completionTokens = 0;
-    const toolUses: ToolUseLog[] = [];
-
-    // Track in-flight tool calls by ID
-    const pendingTools = new Map<string, { name: string; input: string; startTime: number }>();
+    const state = createStreamState();
 
     proc.stdout!.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
-
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-
         try {
-          const event = JSON.parse(trimmed);
-
-          // Capture result text
-          if (event.type === "result") {
-            if (event.result) resultText = event.result;
-            if (event.input_tokens) promptTokens = event.input_tokens;
-            if (event.output_tokens) completionTokens = event.output_tokens;
-            if (event.model) model = event.model;
-          }
-
-          // Capture assistant messages for tool calls
-          if (event.type === "assistant" && event.message?.content) {
-            const content = event.message.content;
-            if (Array.isArray(content)) {
-              for (const block of content) {
-                if (block.type === "tool_use") {
-                  pendingTools.set(block.id, {
-                    name: block.name,
-                    input: JSON.stringify(block.input || {}),
-                    startTime: Date.now(),
-                  });
-                  onEvent?.({
-                    type: "tool_start",
-                    timestamp: Date.now(),
-                    data: {
-                      toolName: block.name,
-                      toolInput: JSON.stringify(block.input || {}).substring(0, 2000),
-                    },
-                  });
-                } else if (block.type === "text" && block.text) {
-                  assistantTextBlocks.push(block.text);
-                  onEvent?.({
-                    type: "text",
-                    timestamp: Date.now(),
-                    data: { text: block.text },
-                  });
-                }
-              }
-            }
-            // Capture model name
-            if (event.message.model) model = event.message.model;
-          }
-
-          // Capture tool results
-          if (event.type === "user" && event.message?.content) {
-            const content = event.message.content;
-            if (Array.isArray(content)) {
-              for (const block of content) {
-                if (block.type === "tool_result" && block.tool_use_id) {
-                  const pending = pendingTools.get(block.tool_use_id);
-                  if (pending) {
-                    let outputText: string;
-                    if (typeof block.content === "string") {
-                      outputText = block.content;
-                    } else if (Array.isArray(block.content)) {
-                      outputText = block.content.map((c: { text?: string }) => c.text || "").join("");
-                    } else {
-                      outputText = JSON.stringify(block.content);
-                    }
-
-                    const toolDurationMs = Date.now() - pending.startTime;
-                    toolUses.push({
-                      toolName: pending.name,
-                      toolInput: pending.input.substring(0, 4000),
-                      toolOutput: outputText.substring(0, 4000),
-                      isError: block.is_error || false,
-                      durationMs: toolDurationMs,
-                    });
-                    onEvent?.({
-                      type: "tool_result",
-                      timestamp: Date.now(),
-                      data: {
-                        toolName: pending.name,
-                        toolOutput: outputText.substring(0, 2000),
-                        isError: block.is_error || false,
-                        durationMs: toolDurationMs,
-                      },
-                    });
-                    pendingTools.delete(block.tool_use_id);
-                  }
-                }
-              }
-            }
-          }
+          processStreamEvent(JSON.parse(trimmed), state, onEvent);
         } catch {
           // Not valid JSON, skip
         }
@@ -242,53 +268,37 @@ export async function runAgentTask(
       if (stderrOutput.length > 10000) stderrOutput = stderrOutput.slice(-10000);
     });
 
+    const buildResult = (success: boolean, durationMs: number, error?: string): RunResult => ({
+      agentName: definition.config.name,
+      agentId: definition.agentId,
+      success,
+      output: success ? (state.resultText.trim() || buildFallbackOutput(state.assistantTextBlocks, MAX_FALLBACK_CHARS)) : "",
+      model: state.model,
+      tokensUsed: { prompt: state.promptTokens, completion: state.completionTokens },
+      toolUses: state.toolUses,
+      durationMs,
+      ...(error ? { error } : {}),
+    });
+
     proc.on("close", (code: number | null) => {
       clearTimeout(agentTimer);
       const durationMs = Date.now() - startTime;
-
       const isSuccess = code === 0;
 
-      // resultText comes from the CLI's "result" event — the agent's final deliverable.
-      // Fall back to ALL assistant text blocks (joined) if resultText is empty (e.g. crash).
-      // Using all blocks instead of just the last one prevents losing the main deliverable
-      // when the agent's final message is a short housekeeping remark.
-      // Keeps the tail (most recent output) capped at 50KB to prevent DB bloat.
-      let fallbackOutput = assistantTextBlocks.length > 0 ? assistantTextBlocks.join("\n\n") : "";
-      if (fallbackOutput.length > MAX_FALLBACK_CHARS) {
-        fallbackOutput = "[earlier output truncated]\n\n" + fallbackOutput.substring(fallbackOutput.length - MAX_FALLBACK_CHARS);
+      if (isSuccess) {
+        const output = state.resultText.trim() || buildFallbackOutput(state.assistantTextBlocks, MAX_FALLBACK_CHARS);
+        resolve({ ...buildResult(true, durationMs), output });
+      } else {
+        const error = agentTimedOut
+          ? `Agent timed out after ${AGENT_TIMEOUT_MS / 1000}s`
+          : (stderrOutput || `Claude CLI exited with code ${code}`);
+        resolve({ ...buildResult(false, durationMs, error), output: state.resultText.trim() || buildFallbackOutput(state.assistantTextBlocks, MAX_FALLBACK_CHARS) });
       }
-      const finalOutput = resultText.trim() || fallbackOutput;
-
-      resolve({
-        agentName: definition.config.name,
-        agentId: definition.agentId,
-        success: isSuccess,
-        output: finalOutput,
-        model,
-        tokensUsed: { prompt: promptTokens, completion: completionTokens },
-        toolUses,
-        durationMs,
-        ...(isSuccess ? {} : {
-          error: agentTimedOut
-            ? `Agent timed out after ${AGENT_TIMEOUT_MS / 1000}s`
-            : (stderrOutput || `Claude CLI exited with code ${code}`),
-        }),
-      });
     });
 
     proc.on("error", (err: Error) => {
       clearTimeout(agentTimer);
-      resolve({
-        agentName: definition.config.name,
-        agentId: definition.agentId,
-        success: false,
-        output: "",
-        model,
-        tokensUsed: { prompt: promptTokens, completion: completionTokens },
-        toolUses,
-        durationMs: Date.now() - startTime,
-        error: err.message,
-      });
+      resolve(buildResult(false, Date.now() - startTime, err.message));
     });
   });
 

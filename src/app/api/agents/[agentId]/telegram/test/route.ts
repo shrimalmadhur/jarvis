@@ -3,50 +3,41 @@ import { testTelegramNotification } from "@/lib/notifications/telegram";
 import { db } from "@/lib/db";
 import { notificationConfigs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { withErrorHandler } from "@/lib/api/utils";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ agentId: string }> }
-) {
+export const POST = withErrorHandler(async (request, { params }) => {
   const { agentId } = await params;
-  try {
-    const body = await request.json();
-    let { botToken, chatId } = body;
 
-    if (body.useStored || (botToken && botToken.includes("****"))) {
-      const rows = await db
-        .select()
-        .from(notificationConfigs)
-        .where(eq(notificationConfigs.channel, `telegram-agent:${agentId}`))
-        .limit(1);
+  const body = await request.json();
+  let { botToken, chatId } = body;
 
-      const config = rows[0];
-      if (!config) {
-        return NextResponse.json(
-          { success: false, error: "No stored config found" },
-          { status: 404 }
-        );
-      }
+  if (body.useStored || (botToken && botToken.includes("****"))) {
+    const rows = await db
+      .select()
+      .from(notificationConfigs)
+      .where(eq(notificationConfigs.channel, `telegram-agent:${agentId}`))
+      .limit(1);
 
-      const cfg = config.config as Record<string, string>;
-      botToken = cfg.bot_token;
-      chatId = cfg.chat_id;
-    }
-
-    if (!botToken || !chatId) {
+    const config = rows[0];
+    if (!config) {
       return NextResponse.json(
-        { error: "Bot token and chat ID are required" },
-        { status: 400 }
+        { success: false, error: "No stored config found" },
+        { status: 404 }
       );
     }
 
-    const result = await testTelegramNotification(botToken, chatId);
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("Error testing agent Telegram:", error);
+    const cfg = config.config as Record<string, string>;
+    botToken = cfg.bot_token;
+    chatId = cfg.chat_id;
+  }
+
+  if (!botToken || !chatId) {
     return NextResponse.json(
-      { success: false, error: "Test failed" },
-      { status: 500 }
+      { error: "Bot token and chat ID are required" },
+      { status: 400 }
     );
   }
-}
+
+  const result = await testTelegramNotification(botToken, chatId);
+  return NextResponse.json(result);
+});
