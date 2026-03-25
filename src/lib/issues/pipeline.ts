@@ -1411,10 +1411,26 @@ export async function runIssuePipeline(
         return;
       }
 
+      // Fetch PR summary from GitHub (the PR body Claude wrote via gh pr create)
+      let prSummary = prResult.output;
+      try {
+        const prJson = execFileSync("gh", ["pr", "view", prUrl, "--json", "title,body"], {
+          cwd: repo.localRepoPath,
+          encoding: "utf-8",
+          timeout: 15000,
+        });
+        const prData = JSON.parse(prJson);
+        if (prData.body) {
+          prSummary = prData.body.substring(0, MAX_FALLBACK_CHARS);
+        }
+      } catch {
+        // Fallback: keep raw Claude output as prSummary
+      }
+
       await db.update(issues).set({
         status: "completed",
         prUrl,
-        prSummary: prResult.output,
+        prSummary,
         phaseSessionIds,
         completedAt: new Date(),
         updatedAt: new Date(),

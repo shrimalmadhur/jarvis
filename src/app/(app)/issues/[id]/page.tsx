@@ -398,7 +398,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     { title: "Completeness Review", content: issue.planReview2, phaseKey: "3" },
     { title: "Code Review (3 Specialists)", content: issue.codeReview1, phaseKey: "5" },
     { title: "Code Fixes", content: issue.codeReview2, phaseKey: "6" },
-    { title: "Mischief Managed", content: issue.prSummary, phaseKey: "7" },
+    { title: "Mischief Managed", content: issue.prSummary || (issue.prUrl ? `PR created: ${issue.prUrl}` : null), phaseKey: "7" },
   ];
 
   // Session table entries — filter out bare resume pointers when sub-keys exist
