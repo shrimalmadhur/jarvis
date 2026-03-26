@@ -103,19 +103,25 @@ export async function downloadTelegramFile(botToken: string, filePath: string): 
     throw new Error(`Invalid Telegram file_path: ${filePath}`);
   }
   const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-  const response = await nodeFetch(url, { agent: ipv4Agent, timeout: 30000 } as never);
-  if (!response.ok) throw new Error(`Failed to download file: HTTP ${response.status}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 35000);
+  try {
+    const response = await nodeFetch(url, { agent: ipv4Agent, signal: controller.signal } as never);
+    if (!response.ok) throw new Error(`Failed to download file: HTTP ${response.status}`);
 
-  const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
-  if (contentLength > MAX_PHOTO_SIZE_BYTES) {
-    throw new Error(`File too large: ${contentLength} bytes (max ${MAX_PHOTO_SIZE_BYTES})`);
-  }
+    const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
+    if (contentLength > MAX_PHOTO_SIZE_BYTES) {
+      throw new Error(`File too large: ${contentLength} bytes (max ${MAX_PHOTO_SIZE_BYTES})`);
+    }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length > MAX_PHOTO_SIZE_BYTES) {
-    throw new Error(`Downloaded file too large: ${buffer.length} bytes`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_PHOTO_SIZE_BYTES) {
+      throw new Error(`Downloaded file too large: ${buffer.length} bytes`);
+    }
+    return buffer;
+  } finally {
+    clearTimeout(timer);
   }
-  return buffer;
 }
 
 // ── Bot token validation ──────────────────────────────────────

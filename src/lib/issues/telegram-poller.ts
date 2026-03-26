@@ -36,23 +36,37 @@ export async function pollTelegramUpdates(
   offset: number
 ): Promise<{ updates: TelegramUpdate[]; nextOffset: number }> {
   const url = `https://api.telegram.org/bot${botToken}/getUpdates`;
-  const response = await nodeFetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      offset,
-      timeout: 30,
-      allowed_updates: ["message"],
-    }),
-    agent: ipv4Agent,
-    timeout: 35000,
-  } as never);
+  // Use AbortController for reliable timeout — node-fetch's timeout option
+  // doesn't work properly in Bun runtime, causing the poller to hang forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  let data: { ok: boolean; result: TelegramUpdate[] };
+  try {
+    const response = await nodeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        offset,
+        timeout: 30,
+        allowed_updates: ["message"],
+      }),
+      agent: ipv4Agent,
+      signal: controller.signal,
+    } as never);
 
-  if (!response.ok) {
-    throw new Error(`Telegram getUpdates error: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Telegram getUpdates error: ${response.status}`);
+    }
+
+    data = await response.json() as { ok: boolean; result: TelegramUpdate[] };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { updates: [], nextOffset: offset };
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await response.json() as { ok: boolean; result: TelegramUpdate[] };
   const updates = data.result || [];
   const nextOffset = updates.length > 0
     ? updates[updates.length - 1].update_id + 1
