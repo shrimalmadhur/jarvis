@@ -1,10 +1,9 @@
 import { loadEnv } from "./lib/load-env";
 loadEnv();
 import { loadAgentDefinitionsFromDB, loadAgentDefinitionById } from "../src/lib/runner/db-config-loader";
-import { runAgentTask, getAgentWorkspaceDir } from "../src/lib/runner/agent-runner";
+import { runAgentTask } from "../src/lib/runner/agent-runner";
 import { sendAgentResult, sendAgentError, getAgentTelegramConfig } from "../src/lib/runner/telegram-sender";
 import { logRun } from "../src/lib/runner/run-log";
-import { createConversation } from "../src/lib/runner/agent-conversation";
 
 async function runSingleAgent(def: Awaited<ReturnType<typeof loadAgentDefinitionsFromDB>>[number]) {
   console.log(`\n--- Running agent: ${def.config.name} ---`);
@@ -24,9 +23,8 @@ async function runSingleAgent(def: Awaited<ReturnType<typeof loadAgentDefinition
   }
 
   // Log run to DB
-  let runId: string | undefined;
   try {
-    runId = await logRun(result);
+    await logRun(result);
   } catch (err) {
     console.error("Failed to log run:", err);
   }
@@ -36,27 +34,8 @@ async function runSingleAgent(def: Awaited<ReturnType<typeof loadAgentDefinition
   if (telegramConfig) {
     try {
       if (result.success) {
-        // Always include conversation hint — the poller will handle replies
-        const messageId = await sendAgentResult(telegramConfig, def.config.name, result, true);
+        await sendAgentResult(telegramConfig, def.config.name, result);
         console.log("Sent to Telegram.");
-
-        // Create a conversation record so the poller can pick up replies
-        if (result.claudeSessionId && def.agentId) {
-          try {
-            const convId = await createConversation({
-              agentId: def.agentId,
-              agentRunId: runId,
-              claudeSessionId: result.claudeSessionId,
-              workspaceDir: getAgentWorkspaceDir(def),
-              botToken: telegramConfig.botToken,
-              chatId: telegramConfig.chatId,
-              botMessageId: messageId,
-            });
-            console.log(`Conversation created (${convId.substring(0, 8)}), replies will be handled by the poller.`);
-          } catch (err) {
-            console.error("Failed to create conversation record:", err);
-          }
-        }
       } else {
         await sendAgentError(telegramConfig, def.config.name, result);
         console.log("Sent error to Telegram.");

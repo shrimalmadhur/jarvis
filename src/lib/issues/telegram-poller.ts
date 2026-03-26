@@ -2,11 +2,12 @@ import nodeFetch from "node-fetch";
 import { db } from "@/lib/db";
 import { repositories, issues, issueMessages, notificationConfigs } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
+import { sendTelegramMessage, sendTelegramReply, escapeHtml, markdownToTelegramHtml, TELEGRAM_SAFE_MSG_LEN } from "@/lib/notifications/telegram";
 import { ipv4Agent } from "@/lib/telegram/api";
 import { PHASE_STATUS_MAP } from "./types";
 import type { TelegramUpdate, IssuesTelegramConfig } from "./types";
 import { saveTelegramPhoto } from "./attachments";
+import { resumeSession } from "@/lib/runner/agent-conversation";
 
 /**
  * Load the dedicated issues Telegram bot config from notification_configs.
@@ -122,18 +123,25 @@ export async function processTelegramUpdate(
         }
       }
 
-      // If issue is waiting_for_input, update status back to the phase it was in
       const [issue] = await db
         .select()
         .from(issues)
         .where(eq(issues.id, issueMsg.issueId))
         .limit(1);
 
+      // If issue is waiting_for_input, update status back to the phase it was in
       if (issue?.status === "waiting_for_input") {
         const resumeStatus = PHASE_STATUS_MAP[issue.currentPhase] || "pending";
         await db.update(issues)
           .set({ status: resumeStatus, updatedAt: new Date() })
           .where(eq(issues.id, issue.id));
+      }
+
+      // If issue is completed, resume the Claude session to continue the conversation
+      if (issue?.status === "completed" && messageText) {
+        handleCompletedIssueReply(issue, messageText, msg.message_id, config).catch((err) => {
+          console.error(`[poller] Failed to handle completed issue reply:`, err);
+        });
       }
       return;
     }
@@ -186,4 +194,74 @@ export async function processTelegramUpdate(
     `Repository: ${escapeHtml(repo.name)}\n` +
     `ID: <code>${newIssue.id.substring(0, 8)}</code>`
   );
+}
+
+// ── Completed issue conversation ─────────────────────────────
+
+// Concurrency guard — only one resume per issue at a time
+const activeIssueResumes = new Set<string>();
+
+/**
+ * Handle a reply to a completed issue by resuming the Claude session.
+ * The response is sent back as a threaded Telegram reply, and both
+ * messages are stored in issueMessages for future reply matching.
+ */
+async function handleCompletedIssueReply(
+  issue: typeof issues.$inferSelect,
+  userText: string,
+  userMessageId: number,
+  config: IssuesTelegramConfig
+) {
+  if (activeIssueResumes.has(issue.id)) {
+    try {
+      await sendTelegramReply(config,
+        `<i>Still processing your previous message, I'll get to this one next.</i>`,
+        userMessageId
+      );
+    } catch { /* best effort */ }
+    return;
+  }
+
+  // Find the session to resume: prefer the implementation session (phase 4),
+  // fall back to the planning session, then any available session
+  const sessionIds = (issue.phaseSessionIds as Record<string, string>) || {};
+  const sessionId = sessionIds["4"] || issue.planningSessionId || Object.values(sessionIds).pop();
+
+  if (!sessionId || !issue.worktreePath) {
+    console.log(`[poller] No session/worktree for completed issue ${issue.id.substring(0, 8)}, skipping conversation`);
+    return;
+  }
+
+  activeIssueResumes.add(issue.id);
+  console.log(`[poller] Resuming session for completed issue ${issue.id.substring(0, 8)}: "${userText.substring(0, 80)}${userText.length > 80 ? "..." : ""}"`);
+
+  try {
+    const response = await resumeSession(sessionId, issue.worktreePath, userText);
+
+    const truncated = response.length > TELEGRAM_SAFE_MSG_LEN
+      ? response.substring(0, TELEGRAM_SAFE_MSG_LEN) + "..."
+      : response;
+    const responseHtml = markdownToTelegramHtml(truncated);
+    const botMsgId = await sendTelegramReply(config, responseHtml, userMessageId);
+
+    // Store Claude's response so the user can reply to it too (chain continues)
+    await db.insert(issueMessages).values({
+      issueId: issue.id,
+      direction: "from_claude",
+      message: response,
+      telegramMessageId: botMsgId,
+    });
+
+    console.log(`[poller] Sent conversation response for issue ${issue.id.substring(0, 8)} (msgId: ${botMsgId})`);
+  } catch (err) {
+    console.error(`[poller] Error resuming session for issue ${issue.id.substring(0, 8)}:`, err);
+    try {
+      await sendTelegramReply(config,
+        `<i>Something went wrong processing your reply. Please try again.</i>`,
+        userMessageId
+      );
+    } catch { /* best effort */ }
+  } finally {
+    activeIssueResumes.delete(issue.id);
+  }
 }
