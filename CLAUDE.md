@@ -127,6 +127,8 @@ scripts/
     run-agents.ts                     # CLI: bun run scripts/run-agents.ts [agent-name] [--project name]
     migrate-fs-agents.ts              # One-time: migrate filesystem agents to DB
     install-cron.sh                   # Generate crontab entries from agent configs
+docs/
+    plans/                            # Implementation plans (date-prefixed, e.g. 2026-03-26-unit-tests.md)
 data/
     dobby.db                          # SQLite database (gitignored)
 ```
@@ -203,6 +205,10 @@ ANTHROPIC_API_KEY=...                 # Anthropic (optional)
 FOOD_FACTS_TELEGRAM_BOT_TOKEN=...    # Food facts agent bot token
 FOOD_FACTS_TELEGRAM_CHAT_ID=...      # Food facts agent chat ID
 ```
+
+## Documentation
+
+Plans and design docs go in `docs/plans/` with date-prefixed filenames (e.g. `2026-03-26-unit-tests.md`). Do NOT put plan files in the repo root.
 
 ## Path Aliases
 
