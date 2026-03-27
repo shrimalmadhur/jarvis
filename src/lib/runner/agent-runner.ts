@@ -215,7 +215,7 @@ export async function runAgentTask(
   // 2. Output rules (deliverable-only output, no housekeeping remarks)
   const systemPrompt = definition.soul + MEMORY_CONTEXT_NOTE + AGENT_OUTPUT_RULES;
 
-  // Generate a session ID so we can link agent runs to Claude sessions in Pensieve
+  // Generate a session ID so we can link agent runs to Claude sessions
   const sessionId = crypto.randomUUID();
   const sessionProjectDir = encodeProjectDir(workspaceDir);
 

@@ -13,8 +13,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dobby - A Free Elf",
-  description: "Dobby is a free elf! Your loyal magical AI assistant.",
+  title: "Dobby",
+  description: "Your personal AI agent.",
 };
 
 export default function RootLayout({

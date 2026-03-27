@@ -107,7 +107,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
 
       {/* Skill */}
       <div>
-        <label className={labelClasses}>spell instructions // skill</label>
+        <label className={labelClasses}>task instructions // skill</label>
         <MarkdownEditor
           value={form.skill}
           onChange={(v) => update("skill", v)}
@@ -120,7 +120,7 @@ export function AgentForm({ initialValues, onSubmit, submitLabel }: AgentFormPro
       {/* Schedule + Timezone */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelClasses}>magical alarm // cron</label>
+          <label className={labelClasses}>schedule // cron</label>
           <input
             type="text"
             value={form.schedule}

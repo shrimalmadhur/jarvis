@@ -25,7 +25,7 @@ import {
   Clock,
   Eye,
   EyeOff,
-  Wand2,
+  Key,
   Loader2,
 } from "lucide-react";
 
@@ -198,7 +198,7 @@ export default function SettingsPage() {
   const [sessionRetentionSaving, setSessionRetentionSaving] = useState(false);
   const [sessionRetentionSaved, setSessionRetentionSaved] = useState(false);
 
-  // Wand Core (env file) state
+  // API Keys (env file) state
   const [envKeys, setEnvKeys] = useState<Record<string, { set: boolean; masked: string; value?: string }>>({});
   const [envExists, setEnvExists] = useState(false);
   const [envEditing, setEnvEditing] = useState<Record<string, string>>({});
@@ -453,9 +453,9 @@ export default function SettingsPage() {
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-5xl px-8 lg:px-16 py-8 space-y-8">
         <div className="animate-fade-in">
-          <h1 className="text-xl font-semibold text-foreground">Room of Requirement</h1>
+          <h1 className="text-xl font-semibold text-foreground">Settings</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure Dobby&apos;s magical connections and enchantments
+            Configure Dobby&apos;s integrations and tools
           </p>
         </div>
 
@@ -463,7 +463,7 @@ export default function SettingsPage() {
         {servers.length > 0 && (
           <Card className="animate-fade-in">
             <CardHeader>
-              <CardTitle>Active Enchantments</CardTitle>
+              <CardTitle>Active Integrations</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {servers.map((server) => (
@@ -515,7 +515,7 @@ export default function SettingsPage() {
         {/* Preset Library */}
         <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle>Enchantment Library</CardTitle>
+            <CardTitle>Integration Library</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-2.5">
@@ -617,7 +617,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Terminal className="h-4 w-4" />
-                <span>Custom enchantment</span>
+                <span>Custom integration</span>
                 {showCustom ? (
                   <ChevronUp className="h-3 w-3" />
                 ) : (
@@ -686,13 +686,13 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Pensieve Retention
+              Session Retention
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Memories older than the specified days will fade from the Pensieve.
-              Leave empty to preserve all memories forever.
+              Sessions older than the specified days will be automatically cleaned up.
+              Leave empty to preserve all sessions.
             </p>
             <div>
               <label className="mb-1 block text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -749,24 +749,24 @@ export default function SettingsPage() {
               </div>
               {sessionRetentionSaved && (
                 <p className="mt-2 text-xs text-green">
-                  Pensieve retention enchantment saved
+                  Session retention setting saved
                 </p>
               )}
               {sessionRetentionDays && (
                 <p className="mt-2 text-xs text-muted">
-                  Memories older than {sessionRetentionDays} day{sessionRetentionDays !== "1" ? "s" : ""} will fade from the Pensieve
+                  Sessions older than {sessionRetentionDays} day{sessionRetentionDays !== "1" ? "s" : ""} will be cleaned up
                 </p>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Wand Core Selection - live env editor */}
+        {/* API Keys - live env editor */}
         <Card className="animate-fade-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Wand2 className="h-4 w-4" />
-              Wand Core Selection
+              <Key className="h-4 w-4" />
+              API Keys
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -778,7 +778,7 @@ export default function SettingsPage() {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Manage your wand cores from the enchanted scroll at{" "}
+                  Manage your API keys from the environment file at{" "}
                   <code className="rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[12px] text-accent">
                     /etc/dobby/env
                   </code>
@@ -786,7 +786,7 @@ export default function SettingsPage() {
                 <div className="space-y-3">
                   {(() => {
                     const knownLabels: Record<string, string> = {
-                      GEMINI_API_KEY: "Gemini (default wand core)",
+                      GEMINI_API_KEY: "Gemini (default)",
                       OPENAI_API_KEY: "OpenAI",
                       ANTHROPIC_API_KEY: "Anthropic",
                     };
@@ -966,12 +966,12 @@ export default function SettingsPage() {
 
                 {envSaved && (
                   <div className="rounded-lg bg-green/10 px-3 py-2 text-xs text-green">
-                    Enchantment saved. Restart Dobby to apply changes.
+                    Setting saved. Restart Dobby to apply changes.
                   </div>
                 )}
 
                 <p className="text-xs text-muted">
-                  Dobby&apos;s default wand core is Gemini. Changes require a restart to take effect.
+                  Dobby&apos;s default provider is Gemini. Changes require a restart to take effect.
                 </p>
               </>
             )}

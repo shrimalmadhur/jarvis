@@ -730,7 +730,7 @@ export default function AgentDetailPage() {
         </div>
         <p className="text-[17px] text-muted-foreground">{error || "Agent not found"}</p>
         <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-[15px] text-accent transition-colors hover:text-accent-dim">
-          <ArrowLeft className="h-3 w-3" />Back to House
+          <ArrowLeft className="h-3 w-3" />Back to Project
         </Link>
       </div>
     );
@@ -754,7 +754,7 @@ export default function AgentDetailPage() {
                   <Bot className="h-5.5 w-5.5 text-accent" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Enchant House-Elf</h1>
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Edit Agent</h1>
                   <p className="text-[16px] text-muted-foreground">{agent.name}</p>
                 </div>
               </div>
@@ -793,7 +793,7 @@ export default function AgentDetailPage() {
               className="inline-flex items-center gap-1.5 text-[15px] text-muted-foreground transition-colors hover:text-foreground group mb-5"
             >
               <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-              Back to House
+              Back to Project
             </Link>
 
             <div className="space-y-3">
@@ -810,7 +810,7 @@ export default function AgentDetailPage() {
                     agent.enabled ? "border-green/20 bg-green/8 text-green" : "border-border bg-surface-raised text-muted"
                   )}>
                     <span className={cn("h-1.5 w-1.5 rounded-full", agent.enabled ? "bg-green status-dot-live" : "bg-muted")} />
-                    {agent.enabled ? "Enchanted" : "Dormant"}
+                    {agent.enabled ? "Active" : "Inactive"}
                   </span>
                   <button
                     onClick={handleRunNow}
@@ -823,7 +823,7 @@ export default function AgentDetailPage() {
                     ) : (
                       <Play className="h-3.5 w-3.5" />
                     )}
-                    {running ? "Casting..." : "Cast Spell"}
+                    {running ? "Running..." : "Run Now"}
                   </button>
                   <button onClick={() => setEditMode(true)} className="rounded-xl border border-border p-2.5 text-muted-foreground transition-colors hover:text-foreground hover:border-border-hover" title="Edit">
                     <Pencil className="h-4 w-4" />

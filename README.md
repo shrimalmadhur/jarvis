@@ -1,7 +1,5 @@
 # Dobby
 
-> *"Dobby is a free elf!"*
-
 A local-first personal AI agent with a web chat interface. Single-user, self-hosted, no external databases. Dobby connects to multiple LLM providers (Gemini, OpenAI, Anthropic), extends its capabilities through MCP (Model Context Protocol) servers, and can run autonomous scheduled agents with Telegram notifications.
 
 ## Features
@@ -231,4 +229,4 @@ Extend Dobby's capabilities by adding MCP (Model Context Protocol) servers:
 
 ## License
 
-Dobby is a free elf.
+MIT License

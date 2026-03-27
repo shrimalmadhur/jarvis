@@ -82,7 +82,7 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
               )}
             >
               <span className={cn("h-1.5 w-1.5 rounded-full", agent.enabled ? "bg-green status-dot-live" : "bg-muted")} />
-              {agent.enabled ? "enchanted" : "dormant"}
+              {agent.enabled ? "active" : "inactive"}
             </span>
           </div>
 
@@ -128,7 +128,7 @@ function AgentCard({ agent, projectId, index }: { agent: ProjectAgent; projectId
                 {duration && <span className="text-muted">{duration}</span>}
               </div>
             ) : (
-              <span className="text-[13px] font-mono text-muted italic">no spells cast</span>
+              <span className="text-[13px] font-mono text-muted italic">no runs yet</span>
             )}
             <span className="text-muted opacity-0 group-hover:opacity-100 group-hover:text-accent transition-all">
               <ArrowRight className="h-3 w-3" />
@@ -236,7 +236,7 @@ export default function ProjectDetailPage() {
           <div className="animate-fade-in">
             <Link href="/projects" className="inline-flex items-center gap-1.5 text-[14px] font-mono text-muted-foreground hover:text-accent transition-colors group mb-4">
               <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
-              houses
+              projects
             </Link>
 
             <div className="flex items-start justify-between gap-4">
@@ -277,7 +277,7 @@ export default function ProjectDetailPage() {
                   </button>
                   {confirmDelete ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-mono text-red">Obliviate?</span>
+                      <span className="text-[13px] font-mono text-red">Delete?</span>
                       <button onClick={handleDelete} disabled={deleting} className="border border-red/30 bg-red/5 px-2 py-1 text-[13px] font-mono text-red hover:bg-red/15 disabled:opacity-40">{deleting ? "..." : "y"}</button>
                       <button onClick={() => setConfirmDelete(false)} className="text-[13px] font-mono text-muted hover:text-foreground">n</button>
                     </div>
@@ -297,7 +297,7 @@ export default function ProjectDetailPage() {
         {/* Agents header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-[13px] font-mono text-muted uppercase tracking-widest">house-elves</span>
+            <span className="text-[13px] font-mono text-muted uppercase tracking-widest">agents</span>
             <span className="border border-accent/30 bg-accent/5 px-2 py-0.5 text-[13px] font-mono font-bold text-accent">
               {agents.length}
             </span>
@@ -307,7 +307,7 @@ export default function ProjectDetailPage() {
             className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[13px] font-mono font-bold text-accent uppercase tracking-wider hover:bg-accent/15 hover:border-accent hover:shadow-[0_0_12px_rgba(212,165,32,0.15)] transition-all"
           >
             <Plus className="h-3.5 w-3.5" />
-            summon elf
+            new agent
           </Link>
         </div>
 
@@ -326,9 +326,9 @@ export default function ProjectDetailPage() {
         ) : (
           <div className="animate-fade-in flex flex-col items-center justify-center py-20 text-center border border-dashed border-border">
             <div className="text-[14px] font-mono text-muted-foreground space-y-1">
-              <p className="text-muted">No house-elves serve this house yet...</p>
-              <p>0 elves bound</p>
-              <p className="text-muted mt-3">cast <span className="text-accent">&quot;summon elf&quot;</span> to call one into service</p>
+              <p className="text-muted">No agents in this project yet</p>
+              <p>0 agents</p>
+              <p className="text-muted mt-3">click <span className="text-accent">&quot;new agent&quot;</span> to create one</p>
             </div>
           </div>
         )}

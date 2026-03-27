@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── DARK THEME (default) ── Hogwarts at Night ───────────────── */
+/* ── DARK THEME (default) ───────────────────────────────────── */
 :root {
   --background: #0f0d13;
   --foreground: #e8dfd0;
@@ -28,7 +28,7 @@
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', monospace;
 }
 
-/* ── LIGHT THEME ── The Great Hall in Daylight ───────────────── */
+/* ── LIGHT THEME ─────────────────────────────────────────────── */
 .light {
   --background: #f5eed8;
   --foreground: #2c1810;

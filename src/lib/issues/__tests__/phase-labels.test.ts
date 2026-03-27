@@ -11,11 +11,11 @@ describe("PHASE_LABELS", () => {
   });
 
   test("index 0 is the pending/queued phase", () => {
-    expect(PHASE_LABELS[0]).toBe("Awaiting Owl");
+    expect(PHASE_LABELS[0]).toBe("Pending");
   });
 
   test("last entry is the PR creation phase", () => {
-    expect(PHASE_LABELS[7]).toBe("Mischief Managed");
+    expect(PHASE_LABELS[7]).toBe("Creating PR");
   });
 
   test("all entries are non-empty strings", () => {
@@ -72,12 +72,12 @@ describe("STATUS_DISPLAY_NAMES", () => {
     }
   });
 
-  test("completed maps to 'mischief managed'", () => {
-    expect(STATUS_DISPLAY_NAMES.completed).toBe("mischief managed");
+  test("completed maps to 'completed'", () => {
+    expect(STATUS_DISPLAY_NAMES.completed).toBe("completed");
   });
 
-  test("failed maps to 'caught by filch'", () => {
-    expect(STATUS_DISPLAY_NAMES.failed).toBe("caught by filch");
+  test("failed maps to 'failed'", () => {
+    expect(STATUS_DISPLAY_NAMES.failed).toBe("failed");
   });
 
   test("all values are lowercase (for uppercase CSS rendering)", () => {
