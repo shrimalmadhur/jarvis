@@ -864,8 +864,19 @@ export async function runIssuePipeline(
   if (!existsSync(worktreeDir)) {
     mkdirSync(join(repo.localRepoPath, ".claude", "worktrees"), { recursive: true });
 
+    // Fetch latest default branch so worktree starts from current remote code
     try {
-      execFileSync("git", ["worktree", "add", worktreeDir, "-b", branchName, repo.defaultBranch], {
+      execFileSync("git", ["fetch", "origin", repo.defaultBranch], {
+        cwd: repo.localRepoPath, stdio: "ignore", timeout: 30_000,
+      });
+    } catch {
+      // Non-fatal: proceed with last-known origin/<defaultBranch> or local state.
+      // Common reasons: offline, no remote named 'origin', non-default refspec.
+      console.warn(`[pipeline] Could not fetch latest ${repo.defaultBranch} — will use last-known origin/${repo.defaultBranch}`);
+    }
+
+    try {
+      execFileSync("git", ["worktree", "add", worktreeDir, "-b", branchName, `origin/${repo.defaultBranch}`], {
         cwd: repo.localRepoPath, stdio: "ignore",
       });
     } catch {
