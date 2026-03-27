@@ -92,13 +92,6 @@
       "when": 1774652400000,
       "tag": "0012_fix_slack_thread_columns",
       "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "6",
-      "when": 1774653145319,
-      "tag": "0013_boring_retro_girl",
-      "breakpoints": true
     }
   ]
 }

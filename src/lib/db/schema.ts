@@ -87,7 +87,7 @@ export const llmConfigs = sqliteTable("llm_configs", {
 
 export const notificationConfigs = sqliteTable("notification_configs", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  channel: text("channel").notNull().unique(), // e.g. 'telegram-agent:{id}', 'slack-issues'
+  channel: text("channel").notNull(), // 'telegram', etc.
   enabled: integer("enabled", { mode: "boolean" }).default(true).notNull(),
   config: text("config", { mode: "json" }).$type<Record<string, string>>().default({}),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),

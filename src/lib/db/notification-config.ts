@@ -4,20 +4,28 @@ import { eq } from "drizzle-orm";
 
 /**
  * Upsert a notification config by channel key.
- * Uses ON CONFLICT to avoid TOCTOU race conditions.
  */
 export function upsertNotificationConfig(
   channel: string,
   config: Record<string, string>,
   enabled = true
 ): void {
-  db.insert(notificationConfigs)
-    .values({ channel, enabled, config })
-    .onConflictDoUpdate({
-      target: notificationConfigs.channel,
-      set: { enabled, config, updatedAt: new Date() },
-    })
-    .run();
+  const existing = db
+    .select()
+    .from(notificationConfigs)
+    .where(eq(notificationConfigs.channel, channel))
+    .get();
+
+  if (existing) {
+    db.update(notificationConfigs)
+      .set({ enabled, config, updatedAt: new Date() })
+      .where(eq(notificationConfigs.id, existing.id))
+      .run();
+  } else {
+    db.insert(notificationConfigs)
+      .values({ channel, enabled, config })
+      .run();
+  }
 }
 
 /**
