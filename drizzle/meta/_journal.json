@@ -85,6 +85,13 @@
       "when": 1774600000000,
       "tag": "0011_nice_slack_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1774652400000,
+      "tag": "0012_fix_slack_thread_columns",
+      "breakpoints": true
     }
   ]
 }
