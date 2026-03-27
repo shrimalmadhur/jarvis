@@ -8,6 +8,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --branch main
 #   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --version v0.2.0
+#   curl -fsSL https://raw.githubusercontent.com/shrimalmadhur/dobby/main/get-dobby.sh | sudo bash -s -- --force
 #
 # Or download-and-inspect first:
 #
@@ -20,10 +21,12 @@ set -euo pipefail
 REPO_URL="https://github.com/shrimalmadhur/dobby.git"
 SRC_DIR="/usr/local/src/dobby"
 INSTALL_DIR="/usr/local/lib/dobby"
+# SECURITY: must remain hardcoded — used in rm -rf as root
 LOCK_DIR="/var/lock/dobby-install.lock"
 BRANCH=""
 VERSION=""
 EXPLICIT_BRANCH=false
+FORCE=false
 OS="$(uname -s)"
 
 # ---------------------------------------------------------------------------
@@ -83,6 +86,7 @@ falls back to the main branch.
 Options:
   --branch NAME     Clone/checkout a specific branch (e.g., main, dev)
   --version TAG     Checkout a specific version tag (e.g., v0.2.0)
+  --force           Override a stuck install lock
   --help            Show this help message
 
 Examples:
@@ -94,6 +98,9 @@ Examples:
 
   # Install a specific version
   curl -fsSL <url>/get-dobby.sh | sudo bash -s -- --version v0.2.0
+
+  # Force install when a previous run left a stale lock
+  curl -fsSL <url>/get-dobby.sh | sudo bash -s -- --force
 EOF
     exit 0
 }
@@ -109,6 +116,8 @@ while [[ $# -gt 0 ]]; do
         --version|--tag)
             [[ -n "${2:-}" ]] || { red "Error: --version requires a value"; exit 1; }
             VERSION="$2"; shift 2 ;;
+        --force)
+            FORCE=true; shift ;;
         --help|-h)
             usage ;;
         *)
@@ -193,31 +202,69 @@ fi
 
 # ---------------------------------------------------------------------------
 # Portable lock (mkdir is atomic on all filesystems)
+# Parent dir created below — /var/lock may not exist on macOS
 # ---------------------------------------------------------------------------
+recover_stale_lock() {
+    local reason="$1"
+    yellow "Removing stale lock ($reason)"
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" 2>/dev/null || { red "Error: Could not acquire lock after stale removal"; exit 1; }
+    echo $$ > "$LOCK_DIR/pid"
+    # Verify we won the race
+    if [ "$(cat "$LOCK_DIR/pid" 2>/dev/null)" != "$$" ]; then
+        red "Error: Lost lock race — another install started simultaneously"
+        exit 1
+    fi
+}
+
 acquire_lock() {
-    if mkdir "$LOCK_DIR" 2>/dev/null; then
-        # Write our PID so stale detection works
+    local mkdir_err
+    local old_pid
+
+    if [ "$FORCE" = true ] && [ -d "$LOCK_DIR" ]; then
+        yellow "Forcing lock removal (--force specified)"
+        rm -rf "$LOCK_DIR"
+    fi
+
+    mkdir_err=$(mkdir "$LOCK_DIR" 2>&1) && {
         echo $$ > "$LOCK_DIR/pid"
         return 0
+    }
+
+    # mkdir failed — distinguish "lock held" from other errors
+    if [ ! -d "$LOCK_DIR" ]; then
+        # Lock dir doesn't exist after mkdir failed — a real filesystem error
+        red "Error: Could not create lock directory: $mkdir_err"
+        exit 1
     fi
 
     # Lock dir exists — check if it's stale
     if [ -f "$LOCK_DIR/pid" ]; then
-        OLD_PID=$(cat "$LOCK_DIR/pid" 2>/dev/null || echo "")
-        if [ -n "$OLD_PID" ] && ! kill -0 "$OLD_PID" 2>/dev/null; then
-            # Process is gone — stale lock
-            yellow "Removing stale lock (PID $OLD_PID no longer running)"
-            rm -rf "$LOCK_DIR"
-            mkdir "$LOCK_DIR" 2>/dev/null || { red "Error: Could not acquire lock"; exit 1; }
-            echo $$ > "$LOCK_DIR/pid"
+        old_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || echo "")
+        if [ -z "$old_pid" ]; then
+            # PID file exists but is empty — treat as stale
+            recover_stale_lock "empty PID file"
             return 0
         fi
+        if ! kill -0 "$old_pid" 2>/dev/null; then
+            # Process is gone — stale lock
+            recover_stale_lock "PID $old_pid no longer running"
+            return 0
+        fi
+    else
+        # Lock dir exists but no PID file — treat as stale
+        recover_stale_lock "no PID file found"
+        return 0
     fi
 
-    red "Error: Another install/upgrade is already running (lock: $LOCK_DIR)"
+    red "Error: Another install/upgrade is already running (lock: $LOCK_DIR, PID: $old_pid)"
+    red "       If no other install is running, remove the lock manually:"
+    red "       sudo rm -rf $LOCK_DIR"
+    red "       Or re-run with --force to override the lock."
     exit 1
 }
 
+mkdir -p "$(dirname "$LOCK_DIR")"
 acquire_lock
 # Clean up lock on exit — no exec used, so this trap always fires
 trap 'rm -rf "$LOCK_DIR"' EXIT
