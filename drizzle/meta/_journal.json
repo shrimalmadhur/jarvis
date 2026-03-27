@@ -71,6 +71,13 @@
       "when": 1774389551641,
       "tag": "0009_fantastic_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1774574276077,
+      "tag": "0010_complex_doomsday",
+      "breakpoints": true
     }
   ]
 }

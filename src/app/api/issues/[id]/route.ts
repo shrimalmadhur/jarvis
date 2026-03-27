@@ -5,6 +5,7 @@ import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 import { getIssueAttachments, deleteIssueAttachmentFiles } from "@/lib/issues/attachments";
+import { refreshPrStatus } from "@/lib/issues/pr-status";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,16 @@ export const GET = withErrorHandler(async (
 
   const attachments = await getIssueAttachments(id);
 
+  // Refresh PR status from GitHub for non-terminal states (open or null/backfill)
+  let prStatus = issue.prStatus;
+  if (issue.prUrl && prStatus !== "closed" && prStatus !== "merged") {
+    try {
+      prStatus = await refreshPrStatus(issue.id) ?? issue.prStatus;
+    } catch {
+      // Continue with existing prStatus on any failure
+    }
+  }
+
   return NextResponse.json({
     id: issue.id,
     repositoryId: issue.repositoryId,
@@ -48,6 +59,7 @@ export const GET = withErrorHandler(async (
     status: issue.status,
     currentPhase: issue.currentPhase,
     prUrl: issue.prUrl,
+    prStatus,
     prSummary: issue.prSummary,
     phaseSessionIds: issue.phaseSessionIds,
     planOutput: issue.planOutput,

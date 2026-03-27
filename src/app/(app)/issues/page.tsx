@@ -22,6 +22,7 @@ interface Issue {
   status: string;
   currentPhase: number;
   prUrl: string | null;
+  prStatus: string | null;
   error: string | null;
   hasWorktree: boolean;
   createdAt: string;
@@ -42,6 +43,12 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; dot?: string }> 
   completed: { bg: "bg-green/10", text: "text-green" },
   failed: { bg: "bg-red/10", text: "text-red" },
   waiting_for_input: { bg: "bg-amber-500/10", text: "text-amber-400", dot: "bg-amber-400 animate-pulse" },
+};
+
+const PR_STATUS_COLOR: Record<string, string> = {
+  open: "text-green",
+  merged: "text-purple-400",
+  closed: "text-red",
 };
 
 type FilterTab = "all" | "active" | "completed" | "failed" | "archived";
@@ -141,6 +148,11 @@ function IssueCard({ issue, index, onArchive }: { issue: Issue; index: number; o
               >
                 <ExternalLink className="h-3 w-3" />
                 PR
+                {issue.prStatus && (
+                  <span className={`ml-0.5 text-[10px] ${PR_STATUS_COLOR[issue.prStatus] ?? "text-muted"}`}>
+                    ({issue.prStatus})
+                  </span>
+                )}
               </a>
             ) : issue.error ? (
               <span className="text-[12px] font-mono text-red truncate max-w-[200px]">
