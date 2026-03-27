@@ -1,7 +1,8 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test";
 
 // Mock node:child_process before importing the module
-const mockExecFile = mock(() => {});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockExecFile = mock((..._args: any[]) => {});
 mock.module("node:child_process", () => ({
   execFile: mockExecFile,
 }));
