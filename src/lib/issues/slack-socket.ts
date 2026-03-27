@@ -22,6 +22,7 @@ type SlackEvent =
     ts: string;
     thread_ts?: string;
     channel: string;
+    channel_type?: string;
     bot_id?: string;
     subtype?: string;
     files?: Array<{ id?: string; name?: string }>;
@@ -32,6 +33,7 @@ type SlackEvent =
     ts: string;
     thread_ts?: string;
     channel: string;
+    channel_type?: string;
     bot_id?: string;
     subtype?: string;
     files?: Array<{ id?: string; name?: string }>;
@@ -78,9 +80,34 @@ export function parseSlackIssueMessage(text: string): { repoName: string; descri
 }
 
 async function processSlackEvent(event: SlackEvent, config: IssuesSlackConfig): Promise<void> {
-  if (!event.channel || event.bot_id) return;
-  if (event.subtype && event.subtype !== "file_share") return;
-  if (config.channelId && event.channel !== config.channelId) return;
+  console.log("[slack-issues] Incoming event:", JSON.stringify({
+    type: event.type,
+    channel: event.channel,
+    channelType: event.channel_type,
+    ts: event.ts,
+    threadTs: event.thread_ts,
+    subtype: event.subtype,
+    hasBotId: Boolean(event.bot_id),
+    hasText: Boolean(event.text?.trim()),
+    fileCount: event.files?.length ?? 0,
+  }));
+
+  if (!event.channel) {
+    console.log("[slack-issues] Ignoring event without channel");
+    return;
+  }
+  if (event.bot_id) {
+    console.log("[slack-issues] Ignoring bot-authored event");
+    return;
+  }
+  if (event.subtype && event.subtype !== "file_share") {
+    console.log("[slack-issues] Ignoring unsupported subtype:", event.subtype);
+    return;
+  }
+  if (config.channelId && event.channel !== config.channelId) {
+    console.log("[slack-issues] Ignoring event from non-configured channel:", event.channel);
+    return;
+  }
 
   if (event.type === "app_mention" && !event.thread_ts) {
     await handleNewSlackIssue(event, config);
@@ -102,10 +129,14 @@ async function handleNewSlackIssue(
   config: IssuesSlackConfig
 ) {
   const text = event.text?.trim();
-  if (!text) return;
+  if (!text) {
+    console.log("[slack-issues] Ignoring empty app mention");
+    return;
+  }
 
   const parsed = parseSlackIssueMessage(text);
   if (!parsed) {
+    console.log("[slack-issues] Mention did not match issue format");
     await sendSlackMessage(
       { botToken: config.botToken },
       event.channel,
@@ -118,7 +149,10 @@ async function handleNewSlackIssue(
   const [existing] = await db.select().from(issues)
     .where(and(eq(issues.slackChannelId, event.channel), eq(issues.slackThreadTs, event.ts)))
     .limit(1);
-  if (existing) return;
+  if (existing) {
+    console.log("[slack-issues] Issue already exists for mention thread:", existing.id);
+    return;
+  }
 
   const [repo] = await db
     .select()
@@ -127,6 +161,7 @@ async function handleNewSlackIssue(
     .limit(1);
 
   if (!repo) {
+    console.log("[slack-issues] Repository not found for mention:", parsed.repoName);
     await sendSlackMessage(
       { botToken: config.botToken },
       event.channel,
@@ -145,6 +180,8 @@ async function handleNewSlackIssue(
     slackThreadTs: event.ts,
   }).returning();
 
+  console.log("[slack-issues] Created issue from Slack mention:", issue.id);
+
   await sendSlackMessage(
     { botToken: config.botToken },
     event.channel,
@@ -155,13 +192,19 @@ async function handleNewSlackIssue(
 
 async function handleSlackThreadReply(event: SlackEvent, config: IssuesSlackConfig) {
   const text = event.text?.trim();
-  if (!text || !event.thread_ts) return;
+  if (!text || !event.thread_ts) {
+    console.log("[slack-issues] Ignoring thread event without text or thread ts");
+    return;
+  }
 
   const [issue] = await db.select().from(issues)
     .where(and(eq(issues.slackChannelId, event.channel), eq(issues.slackThreadTs, event.thread_ts)))
     .limit(1);
 
-  if (!issue) return;
+  if (!issue) {
+    console.log("[slack-issues] No issue matched Slack thread reply");
+    return;
+  }
 
   const hasFiles = Boolean(event.files && event.files.length > 0);
   if (!text && !hasFiles) return;
@@ -169,7 +212,10 @@ async function handleSlackThreadReply(event: SlackEvent, config: IssuesSlackConf
   const [existingMessage] = await db.select().from(issueMessages)
     .where(eq(issueMessages.slackMessageTs, event.ts))
     .limit(1);
-  if (existingMessage) return;
+  if (existingMessage) {
+    console.log("[slack-issues] Slack reply already recorded:", existingMessage.id);
+    return;
+  }
 
   if (!text && hasFiles) {
     await sendSlackMessage(
@@ -187,6 +233,8 @@ async function handleSlackThreadReply(event: SlackEvent, config: IssuesSlackConf
     message: stripSlackMentions(text!),
     slackMessageTs: event.ts,
   });
+
+  console.log("[slack-issues] Recorded Slack thread reply for issue:", issue.id);
 
   if (issue.status === "waiting_for_input") {
     const resumeStatus = PHASE_STATUS_MAP[issue.currentPhase] || "pending";
