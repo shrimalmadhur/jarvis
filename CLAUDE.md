@@ -210,6 +210,10 @@ FOOD_FACTS_TELEGRAM_CHAT_ID=...      # Food facts agent chat ID
 
 Plans and design docs go in `docs/plans/` with date-prefixed filenames (e.g. `2026-03-26-unit-tests.md`). Do NOT put plan files in the repo root.
 
+## CI / Pull Requests
+
+After creating or pushing to a PR, always check GitHub Actions CI status (`gh run list`, `gh run view <id> --log-failed`). If CI is failing, automatically fetch the failure logs, fix the issues, and push again. Do not tell the user the PR is ready until CI is green.
+
 ## Path Aliases
 
 `@/*` maps to `./src/*` (configured in `tsconfig.json`).
