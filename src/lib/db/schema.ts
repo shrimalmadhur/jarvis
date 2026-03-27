@@ -260,6 +260,7 @@ export const issues = sqliteTable("issues", {
   telegramMessageId: integer("telegram_message_id"),
   telegramChatId: text("telegram_chat_id"),
   prUrl: text("pr_url"),
+  prStatus: text("pr_status"),  // "open" | "closed" | "merged" | null
   prSummary: text("pr_summary"),
   phaseSessionIds: text("phase_session_ids", { mode: "json" }).$type<Record<string, string>>().default({}),
   planOutput: text("plan_output"),

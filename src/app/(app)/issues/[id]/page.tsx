@@ -41,6 +41,7 @@ interface IssueDetail {
   status: string;
   currentPhase: number;
   prUrl: string | null;
+  prStatus: string | null;
   prSummary: string | null;
   phaseSessionIds: Record<string, string> | null;
   planOutput: string | null;
@@ -112,6 +113,12 @@ function getSessionKeyLabel(key: string): string {
   }
   return `Phase ${key}`;
 }
+
+const PR_STATUS_STYLES: Record<string, { border: string; bg: string; text: string; label: string }> = {
+  open: { border: "border-green/50", bg: "bg-green/5", text: "text-green", label: "open" },
+  merged: { border: "border-purple-400/50", bg: "bg-purple-400/5", text: "text-purple-400", label: "merged" },
+  closed: { border: "border-red/50", bg: "bg-red/5", text: "text-red", label: "closed" },
+};
 
 /** Check if a bare key (e.g., "5" or "6") is a resume pointer that should be hidden when sub-keys exist. */
 function isResumePointer(key: string, allKeys: string[]): boolean {
@@ -384,6 +391,8 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     ? `cd ${issue.worktreePath || issue.localRepoPath} && claude --resume ${latestSessionId}`
     : null;
 
+  const prStyle = PR_STATUS_STYLES[issue.prStatus ?? ""] ?? PR_STATUS_STYLES.open;
+
   // Build session hrefs for phase output sections (only when worktreePath exists)
   const sessionHrefFor = (phaseKey: string): string | undefined => {
     const sid = sessionIds[phaseKey];
@@ -458,10 +467,13 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     href={issue.prUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 border border-green/50 bg-green/5 px-3 py-1.5 text-[13px] font-mono text-green hover:bg-green/10 transition-all"
+                    className={`flex items-center gap-1.5 border ${prStyle.border} ${prStyle.bg} px-3 py-1.5 text-[13px] font-mono ${prStyle.text} hover:opacity-80 transition-all`}
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     view PR
+                    {issue.prStatus && (
+                      <span className="text-[11px] uppercase opacity-70">· {prStyle.label}</span>
+                    )}
                   </a>
                 )}
                 {issue.status === "failed" && (
