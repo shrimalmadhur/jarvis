@@ -6,7 +6,7 @@ import type { RunResult } from "../types";
 let capturedFetchCalls: Array<{ url: string; body: string }> = [];
 const mockNodeFetch = mock(async (url: string, opts: { body: string }) => {
   capturedFetchCalls.push({ url, body: opts.body });
-  return { ok: true };
+  return { ok: true, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => "" };
 });
 mock.module("node-fetch", () => ({ default: mockNodeFetch }));
 mock.module("@/lib/telegram/api", () => ({ ipv4Agent: null }));

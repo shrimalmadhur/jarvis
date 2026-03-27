@@ -150,7 +150,7 @@ describe("addMessage", () => {
     expect(mockInsertValues).toHaveBeenCalled();
 
     // Check the values passed to insert
-    const valuesArg = mockInsertValues.mock.calls[0][0] as Record<string, unknown>;
+    const valuesArg = (mockInsertValues.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
     expect(valuesArg.conversationId).toBe("conv-1");
     expect(valuesArg.role).toBe("assistant");
     expect(valuesArg.content).toBe("response");
@@ -169,14 +169,14 @@ describe("addMessage", () => {
       _providerParts: rawParts,
     });
 
-    const valuesArg = mockInsertValues.mock.calls[0][0] as Record<string, unknown>;
+    const valuesArg = (mockInsertValues.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
     expect(valuesArg.providerData).toEqual(rawParts);
   });
 
   test("uses null fallback for optional fields", async () => {
     await addMessage("conv-1", { role: "user", content: "hi" });
 
-    const valuesArg = mockInsertValues.mock.calls[0][0] as Record<string, unknown>;
+    const valuesArg = (mockInsertValues.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
     expect(valuesArg.toolCalls).toBeNull();
     expect(valuesArg.toolCallId).toBeNull();
     expect(valuesArg.providerData).toBeNull();
@@ -186,7 +186,7 @@ describe("addMessage", () => {
   test("stores modelUsed when provided", async () => {
     await addMessage("conv-1", { role: "user", content: "hi" }, "gpt-4o");
 
-    const valuesArg = mockInsertValues.mock.calls[0][0] as Record<string, unknown>;
+    const valuesArg = (mockInsertValues.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
     expect(valuesArg.modelUsed).toBe("gpt-4o");
   });
 
@@ -195,7 +195,7 @@ describe("addMessage", () => {
 
     expect(mockUpdate).toHaveBeenCalled();
     expect(mockUpdateSet).toHaveBeenCalled();
-    const setArg = mockUpdateSet.mock.calls[0][0] as Record<string, unknown>;
+    const setArg = (mockUpdateSet.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
     expect(setArg.updatedAt).toBeInstanceOf(Date);
   });
 });

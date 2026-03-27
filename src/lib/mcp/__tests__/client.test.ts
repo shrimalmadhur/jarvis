@@ -145,10 +145,10 @@ describe("MCPClientManager", () => {
 
     test("aggregates tools from multiple servers", async () => {
       mockListTools.mockImplementationOnce(async () => ({
-        tools: [{ name: "toolA", description: "A", inputSchema: {} }],
+        tools: [{ name: "toolA", description: "A", inputSchema: { type: "object" } }],
       }));
       mockListTools.mockImplementationOnce(async () => ({
-        tools: [{ name: "toolB", description: "B", inputSchema: {} }],
+        tools: [{ name: "toolB", description: "B", inputSchema: { type: "object" } }],
       }));
 
       await manager.connect(makeConfig("server1"));

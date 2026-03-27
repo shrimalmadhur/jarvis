@@ -100,7 +100,7 @@ describe("logRun", () => {
     expect(smartInsert).toHaveBeenCalledTimes(2);
     expect(mockToolValues).toHaveBeenCalled();
 
-    const toolValues = mockToolValues.mock.calls[0][0] as Array<Record<string, unknown>>;
+    const toolValues = (mockToolValues.mock.calls as unknown as Array<[Array<Record<string, unknown>>]>)[0][0];
     expect(toolValues).toHaveLength(2);
     expect(toolValues[0].toolName).toBe("search");
     expect(toolValues[0].runId).toBe("run-123");
