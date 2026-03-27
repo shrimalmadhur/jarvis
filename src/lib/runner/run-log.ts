@@ -5,7 +5,7 @@ import type { RunResult } from "./types";
 /**
  * Log an agent run and its tool uses to the database.
  */
-export async function logRun(result: RunResult): Promise<void> {
+export async function logRun(result: RunResult): Promise<string> {
   const [run] = await db.insert(agentRuns).values({
     agentName: result.agentName,
     agentId: result.agentId || null,
@@ -34,4 +34,6 @@ export async function logRun(result: RunResult): Promise<void> {
       }))
     );
   }
+
+  return run.id;
 }

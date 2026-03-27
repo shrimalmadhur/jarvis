@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2b3bf9eb-a421-4dea-bd90-15e7ea4ea0b1",
-  "prevId": "dc6c38c9-272a-4717-aa59-1a395c4dd964",
+  "id": "10a23538-d94c-48f1-b5fe-920e5f0835ab",
+  "prevId": "1266afc2-2425-4ea1-92de-1bb629a69281",
   "tables": {
     "agent_run_tool_uses": {
       "name": "agent_run_tool_uses",

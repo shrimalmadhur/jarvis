@@ -1,5 +1,6 @@
 import {
   sendTelegramMessage,
+  sendTelegramMessageWithId,
   markdownToTelegramHtml,
   escapeHtml,
   TELEGRAM_SAFE_MSG_LEN,
@@ -68,13 +69,16 @@ export async function getAgentTelegramConfig(
 
 /**
  * Send an agent's run result to its dedicated Telegram bot.
+ * Returns the Telegram message_id of the sent message.
  */
 export async function sendAgentResult(
   telegramConfig: { botToken: string; chatId: string },
   agentName: string,
-  result: RunResult
-): Promise<void> {
-  const maxLen = TELEGRAM_SAFE_MSG_LEN;
+  result: RunResult,
+  includeConversationHint: boolean = false
+): Promise<number> {
+  const hintOverhead = includeConversationHint ? 100 : 0;
+  const maxLen = TELEGRAM_SAFE_MSG_LEN - hintOverhead;
   const trimmed =
     result.output.length > maxLen
       ? result.output.substring(0, maxLen) + "..."
@@ -88,9 +92,12 @@ export async function sendAgentResult(
     `Time: ${(result.durationMs / 1000).toFixed(1)}s`,
   ].join(" | ");
 
-  const message = [outputHtml, "", `<i>${meta}</i>`].join("\n");
+  const parts = [outputHtml, "", `<i>${meta}</i>`];
+  if (includeConversationHint) {
+    parts.push("", `<i>Reply to this message to continue the conversation.</i>`);
+  }
 
-  await sendTelegramMessage(telegramConfig, message);
+  return sendTelegramMessageWithId(telegramConfig, parts.join("\n"));
 }
 
 /**

@@ -2,11 +2,12 @@ import nodeFetch from "node-fetch";
 import { db } from "@/lib/db";
 import { repositories, issues, issueMessages, notificationConfigs } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { sendTelegramMessage, escapeHtml } from "@/lib/notifications/telegram";
+import { sendTelegramMessage, sendTelegramReply, escapeHtml, markdownToTelegramHtml, TELEGRAM_SAFE_MSG_LEN } from "@/lib/notifications/telegram";
 import { ipv4Agent } from "@/lib/telegram/api";
 import { PHASE_STATUS_MAP } from "./types";
 import type { TelegramUpdate, IssuesTelegramConfig } from "./types";
 import { saveTelegramPhoto } from "./attachments";
+import { resumeSession } from "@/lib/runner/agent-conversation";
 
 /**
  * Load the dedicated issues Telegram bot config from notification_configs.
@@ -36,23 +37,37 @@ export async function pollTelegramUpdates(
   offset: number
 ): Promise<{ updates: TelegramUpdate[]; nextOffset: number }> {
   const url = `https://api.telegram.org/bot${botToken}/getUpdates`;
-  const response = await nodeFetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      offset,
-      timeout: 30,
-      allowed_updates: ["message"],
-    }),
-    agent: ipv4Agent,
-    timeout: 35000,
-  } as never);
+  // Use AbortController for reliable timeout — node-fetch's timeout option
+  // doesn't work properly in Bun runtime, causing the poller to hang forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  let data: { ok: boolean; result: TelegramUpdate[] };
+  try {
+    const response = await nodeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        offset,
+        timeout: 30,
+        allowed_updates: ["message"],
+      }),
+      agent: ipv4Agent,
+      signal: controller.signal,
+    } as never);
 
-  if (!response.ok) {
-    throw new Error(`Telegram getUpdates error: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Telegram getUpdates error: ${response.status}`);
+    }
+
+    data = await response.json() as { ok: boolean; result: TelegramUpdate[] };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { updates: [], nextOffset: offset };
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await response.json() as { ok: boolean; result: TelegramUpdate[] };
   const updates = data.result || [];
   const nextOffset = updates.length > 0
     ? updates[updates.length - 1].update_id + 1
@@ -122,18 +137,25 @@ export async function processTelegramUpdate(
         }
       }
 
-      // If issue is waiting_for_input, update status back to the phase it was in
       const [issue] = await db
         .select()
         .from(issues)
         .where(eq(issues.id, issueMsg.issueId))
         .limit(1);
 
+      // If issue is waiting_for_input, update status back to the phase it was in
       if (issue?.status === "waiting_for_input") {
         const resumeStatus = PHASE_STATUS_MAP[issue.currentPhase] || "pending";
         await db.update(issues)
           .set({ status: resumeStatus, updatedAt: new Date() })
           .where(eq(issues.id, issue.id));
+      }
+
+      // If issue is completed, resume the Claude session to continue the conversation
+      if (issue?.status === "completed" && messageText) {
+        handleCompletedIssueReply(issue.id, messageText, msg.message_id, config).catch((err) => {
+          console.error(`[poller] Failed to handle completed issue reply:`, err);
+        });
       }
       return;
     }
@@ -186,4 +208,104 @@ export async function processTelegramUpdate(
     `Repository: ${escapeHtml(repo.name)}\n` +
     `ID: <code>${newIssue.id.substring(0, 8)}</code>`
   );
+}
+
+// ── Completed issue conversation ─────────────────────────────
+
+// Concurrency guard + pending reply queue (one resume per issue at a time)
+const activeIssueResumes = new Set<string>();
+const pendingIssueReplies = new Map<string, { text: string; messageId: number; config: IssuesTelegramConfig }>();
+
+/**
+ * Handle a reply to a completed issue by resuming the Claude session.
+ * The response is sent back as a threaded Telegram reply, and both
+ * messages are stored in issueMessages for future reply matching.
+ */
+async function handleCompletedIssueReply(
+  issueId: string,
+  userText: string,
+  userMessageId: number,
+  config: IssuesTelegramConfig
+) {
+  if (activeIssueResumes.has(issueId)) {
+    // Queue this reply — it will be processed after the current one finishes
+    pendingIssueReplies.set(issueId, { text: userText, messageId: userMessageId, config });
+    try {
+      await sendTelegramReply(config,
+        `<i>Still processing your previous message, I'll get to this one next.</i>`,
+        userMessageId
+      );
+    } catch { /* best effort */ }
+    return;
+  }
+
+  // Acquire guard immediately — before any early returns — so cleanup in
+  // finally is guaranteed and the guard never leaks.
+  activeIssueResumes.add(issueId);
+
+  try {
+    // Re-fetch issue to get current worktreePath (may have been cleaned up)
+    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId)).limit(1);
+    if (!issue || issue.status !== "completed") return;
+
+    // Find the session to resume: prefer latest phase (PR creation → fix → implementation),
+    // fall back to planning session, then earlier phases
+    const sessionIds = (issue.phaseSessionIds as Record<string, string>) || {};
+    const sessionId = sessionIds["7"] || sessionIds["6"] || sessionIds["4"]
+      || issue.planningSessionId || sessionIds["3"] || sessionIds["2"] || sessionIds["1"];
+
+    if (!sessionId || !issue.worktreePath) {
+      console.log(`[poller] No session/worktree for completed issue ${issueId.substring(0, 8)}, skipping conversation`);
+      try {
+        await sendTelegramReply(config,
+          `<i>This issue's workspace has been cleaned up. The conversation can no longer be continued.</i>`,
+          userMessageId
+        );
+      } catch { /* best effort */ }
+      return;
+    }
+
+    console.log(`[poller] Resuming session for completed issue ${issueId.substring(0, 8)}: "${userText.substring(0, 80)}${userText.length > 80 ? "..." : ""}"`);
+
+    const response = await resumeSession(sessionId, issue.worktreePath, userText);
+
+    // Guard against empty responses (e.g., tool-only runs with no text output)
+    const displayText = response.trim() || "(No text response)";
+    const truncated = displayText.length > TELEGRAM_SAFE_MSG_LEN
+      ? displayText.substring(0, TELEGRAM_SAFE_MSG_LEN) + "..."
+      : displayText;
+    const responseHtml = markdownToTelegramHtml(truncated);
+    const botMsgId = await sendTelegramReply(config, responseHtml, userMessageId);
+
+    // Store Claude's response so the user can reply to it too (chain continues)
+    await db.insert(issueMessages).values({
+      issueId,
+      direction: "from_claude",
+      message: response,
+      telegramMessageId: botMsgId,
+    });
+
+    console.log(`[poller] Sent conversation response for issue ${issueId.substring(0, 8)} (msgId: ${botMsgId})`);
+  } catch (err) {
+    console.error(`[poller] Error resuming session for issue ${issueId.substring(0, 8)}:`, err);
+    try {
+      await sendTelegramReply(config,
+        `<i>Something went wrong processing your reply. Please try again.</i>`,
+        userMessageId
+      );
+    } catch { /* best effort */ }
+  } finally {
+    activeIssueResumes.delete(issueId);
+
+    // Process queued reply if one was waiting
+    const pending = pendingIssueReplies.get(issueId);
+    if (pending) {
+      pendingIssueReplies.delete(issueId);
+      // Re-acquire guard before fire-and-forget to prevent concurrent resumes
+      activeIssueResumes.add(issueId);
+      handleCompletedIssueReply(issueId, pending.text, pending.messageId, pending.config).catch((err) => {
+        console.error(`[poller] queued handleCompletedIssueReply error:`, err);
+      });
+    }
+  }
 }

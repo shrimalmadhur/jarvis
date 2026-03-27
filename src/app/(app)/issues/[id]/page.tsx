@@ -88,15 +88,15 @@ function SessionLink({ sessionId, worktreePath, issueId, children, className }: 
 
 /** Map phaseSessionIds keys to human-readable labels for the session table. */
 const SESSION_KEY_LABELS: Record<string, string> = {
-  "1": "Plotting",
+  "1": "Planning",
   "2": "Adversarial Review",
   "3": "Completeness Review",
-  "4": "Casting Spell",
+  "4": "Implementing",
   "5a": "Bugs & Logic Review",
   "5b": "Security Review",
   "5c": "Design & Perf Review",
-  "6": "Reparo!",
-  "7": "Mischief Managed",
+  "6": "Auto-fix",
+  "7": "Creating PR",
 };
 
 function getSessionKeyLabel(key: string): string {
@@ -270,7 +270,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
       if (res.ok) {
         setIssue(await res.json());
       } else {
-        setError("Quest not found on the map");
+        setError("Issue not found");
       }
     } catch {
       setError("Could not connect to server");
@@ -363,7 +363,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
       <div className="flex items-center justify-center h-full">
         <div className="flex items-center gap-2 text-[14px] font-mono text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
-          revealing quest details...
+          Loading issue details...
         </div>
       </div>
     );
@@ -372,7 +372,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
   if (error || !issue) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-[14px] font-mono text-red">{error || "Quest not found on the map"}</div>
+        <div className="text-[14px] font-mono text-red">{error || "Issue not found"}</div>
       </div>
     );
   }
@@ -393,12 +393,12 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
   // Phase output sections — data-driven mapping from PIPELINE_PHASES
   const phaseOutputSections: { title: string; content: string | null; phaseKey: string; defaultOpen?: boolean }[] = [
-    { title: "The Plot", content: issue.planOutput, phaseKey: "1", defaultOpen: issue.currentPhase <= 3 },
+    { title: "Implementation Plan", content: issue.planOutput, phaseKey: "1", defaultOpen: issue.currentPhase <= 3 },
     { title: "Adversarial Review", content: issue.planReview1, phaseKey: "2" },
     { title: "Completeness Review", content: issue.planReview2, phaseKey: "3" },
     { title: "Code Review (3 Specialists)", content: issue.codeReview1, phaseKey: "5" },
     { title: "Code Fixes", content: issue.codeReview2, phaseKey: "6" },
-    { title: "Mischief Managed", content: issue.prSummary || (issue.prUrl ? `PR created: ${issue.prUrl}` : null), phaseKey: "7" },
+    { title: "Pull Request", content: issue.prSummary || (issue.prUrl ? `PR created: ${issue.prUrl}` : null), phaseKey: "7" },
   ];
 
   // Session table entries — filter out bare resume pointers when sub-keys exist
@@ -421,7 +421,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
           <div className="animate-fade-in">
             <Link href="/issues" className="flex items-center gap-1.5 text-[13px] font-mono text-muted-foreground hover:text-accent mb-3 transition-colors">
               <ArrowLeft className="h-3.5 w-3.5" />
-              back to map
+              back to issues
             </Link>
             <div className="flex items-start justify-between">
               <div>
@@ -520,14 +520,14 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
         {issue.status === "waiting_for_input" && (
           <div className="border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-[14px] font-mono text-amber-400">
-            Awaiting your owl via Telegram...
+            Awaiting response via Telegram...
           </div>
         )}
 
         {/* Pipeline progress — dots are clickable when sessions exist */}
         <section className="term-card p-5">
           <div className="text-[12px] font-mono text-muted uppercase tracking-wider mb-4">
-            spell progress
+            pipeline progress
           </div>
           <PipelineBar
             currentPhase={issue.currentPhase}
@@ -539,7 +539,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         </section>
 
         {/* Description */}
-        <CollapsibleSection title="Quest Description" content={issue.description} defaultOpen />
+        <CollapsibleSection title="Issue Description" content={issue.description} defaultOpen />
 
         {/* Attached Images */}
         {issue.attachments && issue.attachments.length > 0 && (
@@ -588,7 +588,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 className="flex items-center gap-1.5 text-[13px] font-mono text-accent hover:text-accent/80 transition-colors"
               >
                 <Zap className="h-3.5 w-3.5" />
-                View Casting Spell session
+                View implementation session
                 <ExternalLink className="h-3 w-3 ml-1" />
               </SessionLink>
             </div>
@@ -599,7 +599,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         {issue.messages.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[13px] font-mono font-bold text-accent uppercase tracking-widest">
-              &gt; Owl Correspondence
+              &gt; Messages
             </h2>
             <div className="space-y-2">
               {issue.messages.map((msg) => (

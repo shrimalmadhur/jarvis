@@ -21,16 +21,16 @@ export default function AppError({
           <AlertTriangle className="h-6 w-6 text-red" />
         </div>
         <h2 className="text-lg font-semibold text-foreground">
-          Mischief managed... badly
+          Something went wrong
         </h2>
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-          {error.message || "A dark spell has struck. Something went wrong."}
+          {error.message || "An unexpected error occurred."}
         </p>
         <button
           onClick={reset}
           className="mt-4 rounded-lg bg-surface-raised px-4 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
         >
-          Cast Reparo
+          Try Again
         </button>
       </div>
     </div>

@@ -120,12 +120,12 @@ function IssueCard({ issue, index, onArchive }: { issue: Issue; index: number; o
             <PipelineProgress currentPhase={issue.currentPhase} status={issue.status} />
             <span className="text-[11px] font-mono text-muted">
               {issue.status === "completed"
-                ? "mischief managed"
+                ? "completed"
                 : issue.status === "failed"
-                  ? "caught by filch"
+                  ? "failed"
                   : issue.currentPhase > 0
                     ? `${PHASE_LABELS[issue.currentPhase] || `phase ${issue.currentPhase}`}`
-                    : "awaiting owl"}
+                    : "pending"}
             </span>
           </div>
 
@@ -203,7 +203,7 @@ export default function IssuesPage() {
         const data = await res.json();
         setIssues(data.issues);
       } else {
-        setError("The map refused to reveal its secrets");
+        setError("Failed to load issues");
       }
     } catch {
       setError("Could not connect to server");
@@ -290,7 +290,7 @@ export default function IssuesPage() {
         const res = await fetch("/api/issues/archive", { method: "POST" });
         if (res.ok) {
           const data = await res.json();
-          setArchiveResult(`archived ${data.archived} quests`);
+          setArchiveResult(`archived ${data.archived} issues`);
           setTimeout(() => setArchiveResult(null), 3000);
         }
       } catch {
@@ -334,11 +334,11 @@ export default function IssuesPage() {
   });
 
   const filterTabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: "all", label: "Entire Map", count: issues.length },
-    { key: "active", label: "Up to No Good", count: issues.filter((i) => !["completed", "failed", "pending"].includes(i.status)).length },
-    { key: "completed", label: "Mischief Managed", count: issues.filter((i) => i.status === "completed").length },
-    { key: "failed", label: "Caught by Filch", count: issues.filter((i) => i.status === "failed").length },
-    { key: "archived", label: "Vanished", count: archivedCount },
+    { key: "all", label: "All", count: issues.length },
+    { key: "active", label: "In Progress", count: issues.filter((i) => !["completed", "failed", "pending"].includes(i.status)).length },
+    { key: "completed", label: "Completed", count: issues.filter((i) => i.status === "completed").length },
+    { key: "failed", label: "Failed", count: issues.filter((i) => i.status === "failed").length },
+    { key: "archived", label: "Archived", count: archivedCount },
   ];
 
   const isShowingArchived = filter === "archived";
@@ -353,11 +353,11 @@ export default function IssuesPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-accent text-[14px] glow-text">&gt;&gt;</span>
                 <h1 className="text-[24px] font-bold tracking-widest text-foreground uppercase glow-text">
-                  Marauder&apos;s Map
+                  Issues
                 </h1>
               </div>
               <p className="text-[14px] text-muted-foreground font-mono ml-6">
-                // I solemnly swear that I am up to no good
+                // track and manage issues
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -424,14 +424,14 @@ export default function IssuesPage() {
                 className="flex h-8 items-center gap-1.5 border border-border bg-surface px-3 text-[13px] font-mono text-muted-foreground transition-all hover:border-accent/50 hover:text-foreground"
               >
                 <Settings2 className="h-3.5 w-3.5" />
-                map config
+                config
               </Link>
               <Link
                 href="/issues/config"
                 className="flex h-8 items-center gap-1.5 border border-accent/50 bg-accent/5 px-4 text-[14px] font-mono font-bold text-accent uppercase tracking-wider transition-all hover:bg-accent/15 hover:border-accent"
               >
                 <Plus className="h-3.5 w-3.5" />
-                new quest
+                new issue
               </Link>
             </div>
           </div>
@@ -461,7 +461,7 @@ export default function IssuesPage() {
           <div className="flex items-center justify-center py-24">
             <div className="flex items-center gap-2 text-[14px] font-mono text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
-              revealing the map...
+              loading issues...
             </div>
           </div>
         )}
@@ -477,18 +477,18 @@ export default function IssuesPage() {
         {!loading && !error && issues.length === 0 && !isShowingArchived && (
           <div className="animate-fade-in flex flex-col items-center justify-center py-24 text-center">
             <div className="text-[14px] font-mono text-muted-foreground space-y-1">
-              <p className="text-muted">The map reveals nothing...</p>
+              <p className="text-muted">No issues found</p>
               {archivedCount > 0 ? (
                 <p className="text-muted-foreground">
-                  All quests vanished &mdash; check the{" "}
+                  All issues archived &mdash; check the{" "}
                   <button onClick={() => setFilter("archived")} className="text-accent hover:underline">
-                    Vanished
+                    Archived
                   </button>{" "}
                   tab
                 </p>
               ) : (
                 <>
-                  <p className="text-muted-foreground">No mischief afoot</p>
+                  <p className="text-muted-foreground">No issues yet</p>
                   <p className="text-muted mt-4">
                     Configure a repository in{" "}
                     <Link href="/issues/config" className="text-accent hover:underline">config</Link>
@@ -504,7 +504,7 @@ export default function IssuesPage() {
         {filtered.length > 0 && (
           <>
             <div className="text-[12px] font-mono text-muted uppercase tracking-wider">
-              {filtered.length} {filtered.length !== 1 ? "quests" : "quest"}
+              {filtered.length} {filtered.length !== 1 ? "issues" : "issue"}
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {filtered.map((issue, idx) => (

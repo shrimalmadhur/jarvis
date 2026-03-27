@@ -121,6 +121,41 @@ export async function sendTelegramMessageWithId(
 }
 
 /**
+ * Send a Telegram message as a reply to a specific message.
+ * Returns the message_id of the sent message for threading.
+ */
+export async function sendTelegramReply(
+  config: TelegramConfig,
+  text: string,
+  replyToMessageId: number
+): Promise<number> {
+  const truncated = text.length > TELEGRAM_MAX_MSG_LEN
+    ? text.substring(0, TELEGRAM_MAX_MSG_LEN - 3) + "..."
+    : text;
+  const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+
+  const response = await nodeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: config.chatId,
+      text: truncated,
+      parse_mode: "HTML",
+      reply_parameters: { message_id: replyToMessageId },
+    }),
+    agent: ipv4Agent,
+  } as never);
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Telegram API error: ${response.status} ${body}`);
+  }
+
+  const result = await response.json() as { ok: boolean; result: { message_id: number } };
+  return result.result.message_id;
+}
+
+/**
  * Escape HTML special characters for Telegram.
  */
 export function escapeHtml(text: string): string {

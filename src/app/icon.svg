@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="7" fill="#d4a520"/>
   <g transform="translate(16,16) rotate(-45)">
-    <!-- Wand body -->
+    <!-- Icon body -->
     <rect x="-1.8" y="-11" width="3.6" height="18" rx="1.2" fill="#1a1520"/>
-    <!-- Wand handle -->
+    <!-- Icon handle -->
     <rect x="-2.4" y="5" width="4.8" height="6" rx="1.5" fill="#7a1a2e"/>
-    <!-- Wand tip spark -->
+    <!-- Icon accent -->
     <circle cx="0" cy="-12.5" r="2" fill="#f0dcc0" opacity="0.9"/>
   </g>
 </svg>

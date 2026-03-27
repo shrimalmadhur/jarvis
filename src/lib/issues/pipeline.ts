@@ -1436,9 +1436,21 @@ export async function runIssuePipeline(
         updatedAt: new Date(),
       }).where(eq(issues.id, issueId));
 
-      await notify(telegramConfig,
-        `Issue completed: <b>${escapeHtml(issue.title)}</b>\nPR: ${escapeHtml(prUrl)}`
-      );
+      // Send completion message and store it in issueMessages so the user
+      // can reply to continue the conversation in the same Claude session
+      const completionHtml = `Issue completed: <b>${escapeHtml(issue.title)}</b>\nPR: ${escapeHtml(prUrl)}\n\n<i>Reply to this message to continue the conversation.</i>`;
+      const completionPlain = `Issue completed: ${issue.title}\nPR: ${prUrl}\n\nReply to this message to continue the conversation.`;
+      try {
+        const msgId = await sendTelegramMessageWithId(telegramConfig, completionHtml);
+        await db.insert(issueMessages).values({
+          issueId,
+          direction: "from_claude",
+          message: completionPlain,
+          telegramMessageId: msgId,
+        });
+      } catch (err) {
+        console.error("[pipeline] Failed to send completion notification:", err);
+      }
     }
 
   } catch (err) {
