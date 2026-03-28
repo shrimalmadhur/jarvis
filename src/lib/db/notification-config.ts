@@ -9,7 +9,7 @@ export function upsertNotificationConfig(
   channel: string,
   config: Record<string, string>,
   enabled = true
-): void {
+): string {
   const existing = db
     .select()
     .from(notificationConfigs)
@@ -21,10 +21,13 @@ export function upsertNotificationConfig(
       .set({ enabled, config, updatedAt: new Date() })
       .where(eq(notificationConfigs.id, existing.id))
       .run();
+    return existing.id;
   } else {
-    db.insert(notificationConfigs)
+    const rows = db.insert(notificationConfigs)
       .values({ channel, enabled, config })
-      .run();
+      .returning({ id: notificationConfigs.id })
+      .all();
+    return rows[0].id;
   }
 }
 

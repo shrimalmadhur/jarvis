@@ -46,13 +46,13 @@ export const POST = withErrorHandler(async (request, { params }) => {
     );
   }
 
-  upsertNotificationConfig(
+  const id = upsertNotificationConfig(
     channelKey(agentId),
     { bot_token: botToken, chat_id: chatId, bot_name: botName || "" },
     enabled ?? true
   );
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, id });
 });
 
 export const DELETE = withErrorHandler(async (_request, { params }) => {

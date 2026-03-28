@@ -6,8 +6,8 @@ import type {
   AgentStatusResponse,
 } from "./types";
 import { CLAUDE_DIR, PROJECTS_DIR } from "./constants";
-import { shortenModel, extractProjectName, decodeProjectDir, parseJsonlEntries } from "./utils";
-import { getSessionStatus, aggregateTokensFromEntries, extractSessionMetadata, summarizeToolInput } from "./session-utils";
+import { shortenModel, extractProjectName, decodeProjectDir } from "./utils";
+import { getSessionStatus, extractSessionMetadata, summarizeToolInput } from "./session-utils";
 
 const TAIL_BYTES = 16_384;
 
@@ -69,12 +69,36 @@ function extractLastAction(entries: ClaudeSessionEntry[]): {
 
 async function aggregateTokensFromFile(filePath: string) {
   const content = await fs.readFile(filePath, "utf-8");
-  const entries = parseJsonlEntries<ClaudeSessionEntry>(content);
-  const tokenUsage = aggregateTokensFromEntries(entries);
-  const messageCount = entries.filter(
-    (e) => e.type === "user" || e.type === "assistant"
-  ).length;
-  return { tokenUsage, messageCount };
+
+  // Fast-path: use string checks to skip JSON parsing for lines without usage data
+  let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheCreationTokens = 0;
+  let messageCount = 0;
+
+  for (const line of content.split("\n")) {
+    if (!line) continue;
+    if (!line.includes('"usage"')) {
+      if (line.includes('"type":"user"') || line.includes('"type":"assistant"')) {
+        messageCount++;
+      }
+      continue;
+    }
+    try {
+      const entry = JSON.parse(line) as ClaudeSessionEntry;
+      if (entry.message?.usage) {
+        const u = entry.message.usage;
+        inputTokens += u.input_tokens || 0;
+        outputTokens += u.output_tokens || 0;
+        cacheReadTokens += u.cache_read_input_tokens || 0;
+        cacheCreationTokens += u.cache_creation_input_tokens || 0;
+      }
+      if (entry.type === "user" || entry.type === "assistant") messageCount++;
+    } catch { /* skip malformed */ }
+  }
+
+  return {
+    tokenUsage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+    messageCount,
+  };
 }
 
 async function readStatsCache(): Promise<{
@@ -167,7 +191,8 @@ export async function scanSessions(): Promise<AgentStatusResponse> {
         if (entries.length === 0) return null;
 
         const sessionId = file.replace(".jsonl", "");
-        const meta = extractSessionMetadata(entries);
+        // Walk backwards to prefer most-recent metadata values from the tail window
+        const meta = extractSessionMetadata([...entries].reverse());
         const fallbackPath = decodeProjectDir(projDir);
         const cwdPath = meta.cwd || fallbackPath;
         const { projectName, workspaceName } = extractProjectName(cwdPath);
