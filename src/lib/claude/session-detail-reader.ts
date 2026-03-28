@@ -14,25 +14,12 @@ import {
   decodeProjectDir,
   parseJsonlEntries,
 } from "./utils";
-import { getSessionStatus, aggregateTokensFromEntries, extractMessageUsage, extractSessionMetadata } from "./session-utils";
+import { getSessionStatus, aggregateTokensFromEntries, extractMessageUsage, extractSessionMetadata, summarizeToolInput } from "./session-utils";
 
 function getContentBlocks(entry: ClaudeSessionEntry) {
   const c = entry.message?.content;
   if (!c || typeof c === "string") return [];
   return c;
-}
-
-function summarizeToolInput(name: string, input?: Record<string, unknown>): string {
-  if (!input) return name;
-  if ("command" in input) return `${name}: ${String(input.command).slice(0, 120)}`;
-  if ("file_path" in input) return `${name}: ${String(input.file_path)}`;
-  if ("query" in input) return `${name}: ${String(input.query).slice(0, 120)}`;
-  if ("pattern" in input) return `${name}: ${String(input.pattern).slice(0, 80)}`;
-  if ("prompt" in input) return `${name}: ${String(input.prompt).slice(0, 120)}`;
-  if ("description" in input) return `${name}: ${String(input.description).slice(0, 120)}`;
-  if ("url" in input) return `${name}: ${String(input.url).slice(0, 100)}`;
-  if ("old_string" in input) return `${name}: replacing in ${input.file_path ?? "file"}`;
-  return name;
 }
 
 interface BuildTimelineOptions {

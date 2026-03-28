@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { projects, agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { updateProjectSchema } from "@/lib/validations/project";
-import { withErrorHandler } from "@/lib/api/utils";
+import { withErrorHandler, parseBody } from "@/lib/api/utils";
 
 export const runtime = "nodejs";
 
@@ -47,21 +47,15 @@ export const PATCH = withErrorHandler(async (request, { params }) => {
   const { id } = await params;
 
   const body = await request.json();
-  const parsed = updateProjectSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
-    );
-  }
+  const { data: parsed, error } = parseBody(body, updateProjectSchema);
+  if (error) return error;
 
   // Check name uniqueness if changing name
-  if (parsed.data.name) {
+  if (parsed.name) {
     const existing = await db
       .select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.name, parsed.data.name))
+      .where(eq(projects.name, parsed.name))
       .limit(1);
 
     if (existing.length > 0 && existing[0].id !== id) {
@@ -74,7 +68,7 @@ export const PATCH = withErrorHandler(async (request, { params }) => {
 
   const [updated] = await db
     .update(projects)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({ ...parsed, updatedAt: new Date() })
     .where(eq(projects.id, id))
     .returning();
 

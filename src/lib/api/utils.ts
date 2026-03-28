@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { ZodSchema, infer as ZodInfer } from "zod";
 
 type RouteContext = { params: Promise<Record<string, string>> };
 
@@ -28,22 +29,22 @@ export function withErrorHandler(handler: RouteHandler): RouteHandler {
   };
 }
 
-/** Shorthand for JSON responses */
-export function jsonResponse<T>(data: T, status = 200) {
-  return NextResponse.json(data, { status });
-}
-
-/** 404 response */
-export function notFound(message = "Not found") {
-  return NextResponse.json({ error: message }, { status: 404 });
-}
-
-/** 409 conflict response */
-export function conflict(message = "Already exists") {
-  return NextResponse.json({ error: message }, { status: 409 });
-}
-
-/** 400 bad request response */
-export function badRequest(message = "Bad request") {
-  return NextResponse.json({ error: message }, { status: 400 });
+/**
+ * Parse a request body against a Zod schema.
+ * Returns { data } on success, or { error: Response } on failure.
+ */
+export function parseBody<T extends ZodSchema>(
+  body: unknown,
+  schema: T
+): { data: ZodInfer<T>; error?: never } | { data?: never; error: Response } {
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return {
+      error: NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Invalid input" },
+        { status: 400 }
+      ),
+    };
+  }
+  return { data: parsed.data };
 }

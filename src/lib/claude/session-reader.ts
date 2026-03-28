@@ -6,8 +6,8 @@ import type {
   AgentStatusResponse,
 } from "./types";
 import { CLAUDE_DIR, PROJECTS_DIR } from "./constants";
-import { shortenModel, extractProjectName, decodeProjectDir } from "./utils";
-import { getSessionStatus } from "./session-utils";
+import { shortenModel, extractProjectName, decodeProjectDir, parseJsonlEntries } from "./utils";
+import { getSessionStatus, aggregateTokensFromEntries, extractSessionMetadata, summarizeToolInput } from "./session-utils";
 
 const TAIL_BYTES = 16_384;
 
@@ -49,21 +49,7 @@ function extractLastAction(entries: ClaudeSessionEntry[]): {
 
     for (const block of entry.message.content) {
       if (block.type === "tool_use" && block.name) {
-        let description = block.name;
-        if (block.input) {
-          if ("command" in block.input) {
-            description = `${block.name}: ${String(block.input.command).slice(0, 80)}`;
-          } else if ("file_path" in block.input) {
-            description = `${block.name}: ${String(block.input.file_path)}`;
-          } else if ("query" in block.input) {
-            description = `${block.name}: ${String(block.input.query).slice(0, 80)}`;
-          } else if ("pattern" in block.input) {
-            description = `${block.name}: ${String(block.input.pattern)}`;
-          } else if ("description" in block.input) {
-            description = String(block.input.description).slice(0, 100);
-          }
-        }
-        return { lastAction: description, lastToolName: block.name };
+        return { lastAction: summarizeToolInput(block.name, block.input), lastToolName: block.name };
       }
       if (block.type === "text" && block.text && block.text.length > 10) {
         return {
@@ -82,61 +68,13 @@ function extractLastAction(entries: ClaudeSessionEntry[]): {
 }
 
 async function aggregateTokensFromFile(filePath: string) {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cacheReadTokens = 0;
-  let cacheCreationTokens = 0;
-  let messageCount = 0;
-
   const content = await fs.readFile(filePath, "utf-8");
-  for (const line of content.split("\n")) {
-    if (!line) continue;
-    // Fast check: skip lines without usage data
-    if (!line.includes('"usage"')) {
-      // Still count messages
-      if (line.includes('"type":"user"') || line.includes('"type":"assistant"')) {
-        messageCount++;
-      }
-      continue;
-    }
-    try {
-      const entry = JSON.parse(line);
-      if (entry.message?.usage) {
-        const u = entry.message.usage;
-        inputTokens += u.input_tokens || 0;
-        outputTokens += u.output_tokens || 0;
-        cacheReadTokens += u.cache_read_input_tokens || 0;
-        cacheCreationTokens += u.cache_creation_input_tokens || 0;
-      }
-      if (entry.type === "user" || entry.type === "assistant") {
-        messageCount++;
-      }
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return {
-    tokenUsage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
-    messageCount,
-  };
-}
-
-function extractMetadata(entries: ClaudeSessionEntry[]) {
-  let slug: string | null = null;
-  let model: string | null = null;
-  let gitBranch: string | null = null;
-  let cwd: string | null = null;
-
-  // Walk backwards to get most recent values
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const e = entries[i];
-    if (!slug && e.slug) slug = e.slug;
-    if (!model && e.message?.model) model = e.message.model;
-    if (!gitBranch && e.gitBranch) gitBranch = e.gitBranch;
-    if (!cwd && e.cwd) cwd = e.cwd;
-    if (slug && model && gitBranch && cwd) break;
-  }
-  return { slug, model, gitBranch, cwd };
+  const entries = parseJsonlEntries<ClaudeSessionEntry>(content);
+  const tokenUsage = aggregateTokensFromEntries(entries);
+  const messageCount = entries.filter(
+    (e) => e.type === "user" || e.type === "assistant"
+  ).length;
+  return { tokenUsage, messageCount };
 }
 
 async function readStatsCache(): Promise<{
@@ -229,7 +167,7 @@ export async function scanSessions(): Promise<AgentStatusResponse> {
         if (entries.length === 0) return null;
 
         const sessionId = file.replace(".jsonl", "");
-        const meta = extractMetadata(entries);
+        const meta = extractSessionMetadata(entries);
         const fallbackPath = decodeProjectDir(projDir);
         const cwdPath = meta.cwd || fallbackPath;
         const { projectName, workspaceName } = extractProjectName(cwdPath);

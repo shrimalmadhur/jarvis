@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const inputClasses =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-border-hover input-focus";
+import { settingsInputClasses as inputClasses } from "@/components/shared/form-classes";
 
 export function SessionRetentionSection() {
   const [sessionRetentionDays, setSessionRetentionDays] = useState("");

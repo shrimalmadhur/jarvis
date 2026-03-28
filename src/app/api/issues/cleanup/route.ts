@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { issues, repositories } from "@/lib/db/schema";
 import { eq, and, isNotNull, isNull, inArray } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
+import { forceRemoveWorktree, pruneWorktrees } from "@/lib/issues/git-worktree";
 
 export const runtime = "nodejs";
 
@@ -57,13 +57,7 @@ export const POST = withErrorHandler(async (request: Request) => {
     const repoPath = repoIssues[0].localRepoPath;
 
     for (const issue of repoIssues) {
-      try {
-        execFileSync("git", ["worktree", "remove", issue.worktreePath!, "--force"], {
-          cwd: repoPath, stdio: "ignore",
-        });
-      } catch {
-        // Worktree may already be gone from disk — still clear DB
-      }
+      forceRemoveWorktree(issue.worktreePath!, repoPath);
 
       try {
         await db.update(issues).set({
@@ -76,12 +70,7 @@ export const POST = withErrorHandler(async (request: Request) => {
       }
     }
 
-    // Prune once per repo
-    try {
-      execFileSync("git", ["worktree", "prune"], { cwd: repoPath, stdio: "ignore" });
-    } catch {
-      // Best-effort prune
-    }
+    pruneWorktrees(repoPath);
   }
 
   return NextResponse.json({ cleaned, errors });

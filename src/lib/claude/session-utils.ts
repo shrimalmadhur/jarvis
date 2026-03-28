@@ -66,6 +66,20 @@ export function extractSessionMetadata(entries: ClaudeSessionEntry[]): {
   return { slug, model, gitBranch, cwd };
 }
 
+/** Summarize a tool_use block's input for display in timelines and session lists. */
+export function summarizeToolInput(name: string, input?: Record<string, unknown>): string {
+  if (!input) return name;
+  if ("command" in input) return `${name}: ${String(input.command).slice(0, 120)}`;
+  if ("file_path" in input) return `${name}: ${String(input.file_path)}`;
+  if ("query" in input) return `${name}: ${String(input.query).slice(0, 120)}`;
+  if ("pattern" in input) return `${name}: ${String(input.pattern).slice(0, 80)}`;
+  if ("prompt" in input) return `${name}: ${String(input.prompt).slice(0, 120)}`;
+  if ("description" in input) return `${name}: ${String(input.description).slice(0, 120)}`;
+  if ("url" in input) return `${name}: ${String(input.url).slice(0, 100)}`;
+  if ("old_string" in input) return `${name}: replacing in ${input.file_path ?? "file"}`;
+  return name;
+}
+
 /** Extract per-message token usage for timeline entries */
 export function extractMessageUsage(
   entry: ClaudeSessionEntry

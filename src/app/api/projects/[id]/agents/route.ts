@@ -5,7 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { createAgentSchema } from "@/lib/validations/agent";
 import { cronToHuman } from "@/lib/utils/cron";
 import { syncCrontab } from "@/lib/cron/sync";
-import { withErrorHandler } from "@/lib/api/utils";
+import { withErrorHandler, parseBody } from "@/lib/api/utils";
 
 export const runtime = "nodejs";
 
@@ -84,21 +84,15 @@ export const POST = withErrorHandler(async (request, { params }) => {
   }
 
   const body = await request.json();
-  const parsed = createAgentSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
-    );
-  }
+  const { data: parsed, error } = parseBody(body, createAgentSchema);
+  if (error) return error;
 
   // Check uniqueness within project
   const existing = await db
     .select({ id: agents.id })
     .from(agents)
     .where(
-      and(eq(agents.projectId, id), eq(agents.name, parsed.data.name))
+      and(eq(agents.projectId, id), eq(agents.name, parsed.name))
     )
     .limit(1);
 
@@ -113,13 +107,13 @@ export const POST = withErrorHandler(async (request, { params }) => {
     .insert(agents)
     .values({
       projectId: id,
-      name: parsed.data.name,
-      soul: parsed.data.soul,
-      skill: parsed.data.skill,
-      schedule: parsed.data.schedule,
-      timezone: parsed.data.timezone || null,
-      envVars: parsed.data.envVars || {},
-      enabled: parsed.data.enabled ?? true,
+      name: parsed.name,
+      soul: parsed.soul,
+      skill: parsed.skill,
+      schedule: parsed.schedule,
+      timezone: parsed.timezone || null,
+      envVars: parsed.envVars || {},
+      enabled: parsed.enabled ?? true,
     })
     .returning();
 

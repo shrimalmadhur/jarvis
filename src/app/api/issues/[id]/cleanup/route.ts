@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { issues, repositories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
+import { removeWorktree } from "@/lib/issues/git-worktree";
 
 export const runtime = "nodejs";
 
@@ -33,16 +33,7 @@ export const POST = withErrorHandler(async (
     .where(eq(repositories.id, issue.repositoryId))
     .limit(1);
 
-  if (repo) {
-    try {
-      execFileSync("git", ["worktree", "remove", issue.worktreePath, "--force"], {
-        cwd: repo.localRepoPath, stdio: "ignore",
-      });
-      execFileSync("git", ["worktree", "prune"], { cwd: repo.localRepoPath, stdio: "ignore" });
-    } catch {
-      // Worktree may already be gone
-    }
-  }
+  if (repo) removeWorktree(issue.worktreePath, repo.localRepoPath);
 
   await db.update(issues).set({
     worktreePath: null,

@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import { repositories, issues } from "@/lib/db/schema";
 import { eq, count, and, isNotNull, isNull } from "drizzle-orm";
 import { updateRepositorySchema } from "@/lib/validations/repository";
-import { withErrorHandler } from "@/lib/api/utils";
+import { withErrorHandler, parseBody } from "@/lib/api/utils";
+import { forceRemoveWorktree, pruneWorktrees } from "@/lib/issues/git-worktree";
 
 export const runtime = "nodejs";
 
@@ -56,20 +57,14 @@ export const PATCH = withErrorHandler(async (
   const { id } = await params;
 
   const body = await request.json();
-  const parsed = updateRepositorySchema.safeParse(body);
+  const { data: parsed, error } = parseBody(body, updateRepositorySchema);
+  if (error) return error;
 
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
-    );
-  }
-
-  if (parsed.data.name) {
+  if (parsed.name) {
     const existing = await db
       .select({ id: repositories.id })
       .from(repositories)
-      .where(eq(repositories.name, parsed.data.name))
+      .where(eq(repositories.name, parsed.name))
       .limit(1);
 
     if (existing.length > 0 && existing[0].id !== id) {
@@ -81,22 +76,22 @@ export const PATCH = withErrorHandler(async (
   }
 
   // Validate localRepoPath if being changed
-  if (parsed.data.localRepoPath) {
-    if (!existsSync(parsed.data.localRepoPath)) {
+  if (parsed.localRepoPath) {
+    if (!existsSync(parsed.localRepoPath)) {
       return NextResponse.json({ error: "Local repo path does not exist" }, { status: 400 });
     }
     try {
-      execFileSync("git", ["rev-parse", "--git-dir"], { cwd: parsed.data.localRepoPath, stdio: "ignore" });
+      execFileSync("git", ["rev-parse", "--git-dir"], { cwd: parsed.localRepoPath, stdio: "ignore" });
     } catch {
       return NextResponse.json({ error: "Path is not a git repository" }, { status: 400 });
     }
   }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
-  if (parsed.data.githubRepoUrl !== undefined) updateData.githubRepoUrl = parsed.data.githubRepoUrl || null;
-  if (parsed.data.localRepoPath !== undefined) updateData.localRepoPath = parsed.data.localRepoPath;
-  if (parsed.data.defaultBranch !== undefined) updateData.defaultBranch = parsed.data.defaultBranch;
+  if (parsed.name !== undefined) updateData.name = parsed.name;
+  if (parsed.githubRepoUrl !== undefined) updateData.githubRepoUrl = parsed.githubRepoUrl || null;
+  if (parsed.localRepoPath !== undefined) updateData.localRepoPath = parsed.localRepoPath;
+  if (parsed.defaultBranch !== undefined) updateData.defaultBranch = parsed.defaultBranch;
 
   const [updated] = await db
     .update(repositories)
@@ -140,17 +135,9 @@ export const DELETE = withErrorHandler(async (
 
   if (repo) {
     for (const issue of repoIssues) {
-      if (issue.worktreePath) {
-        try {
-          execFileSync("git", ["worktree", "remove", issue.worktreePath, "--force"], {
-            cwd: repo.localRepoPath, stdio: "ignore",
-          });
-        } catch { /* best effort */ }
-      }
+      if (issue.worktreePath) forceRemoveWorktree(issue.worktreePath, repo.localRepoPath);
     }
-    try {
-      execFileSync("git", ["worktree", "prune"], { cwd: repo.localRepoPath, stdio: "ignore" });
-    } catch { /* best effort */ }
+    pruneWorktrees(repo.localRepoPath);
   }
 
   const deleted = await db

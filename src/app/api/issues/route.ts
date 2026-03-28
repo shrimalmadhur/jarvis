@@ -5,7 +5,7 @@ import { eq, desc, and, isNull, isNotNull, count, type SQL } from "drizzle-orm";
 import { ensurePollerRunning } from "@/lib/issues/poller-manager";
 import { ensureSlackIssuesSocketRunning } from "@/lib/issues/slack-socket";
 import { createIssueSchema } from "@/lib/validations/issue";
-import { withErrorHandler } from "@/lib/api/utils";
+import { withErrorHandler, parseBody } from "@/lib/api/utils";
 
 export const runtime = "nodejs";
 
@@ -94,20 +94,14 @@ export const GET = withErrorHandler(async (request: Request) => {
 
 export const POST = withErrorHandler(async (request: Request) => {
   const body = await request.json();
-  const parsed = createIssueSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
-    );
-  }
+  const { data: parsed, error } = parseBody(body, createIssueSchema);
+  if (error) return error;
 
   // Verify repository exists
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(eq(repositories.id, parsed.data.repositoryId))
+    .where(eq(repositories.id, parsed.repositoryId))
     .limit(1);
 
   if (!repo) {
@@ -115,9 +109,9 @@ export const POST = withErrorHandler(async (request: Request) => {
   }
 
   const [issue] = await db.insert(issues).values({
-    repositoryId: parsed.data.repositoryId,
-    title: parsed.data.title,
-    description: parsed.data.description,
+    repositoryId: parsed.repositoryId,
+    title: parsed.title,
+    description: parsed.description,
   }).returning();
 
   return NextResponse.json(issue, { status: 201 });

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { projects, agents } from "@/lib/db/schema";
 import { eq, count, desc } from "drizzle-orm";
 import { createProjectSchema } from "@/lib/validations/project";
-import { withErrorHandler } from "@/lib/api/utils";
+import { withErrorHandler, parseBody } from "@/lib/api/utils";
 
 export const runtime = "nodejs";
 
@@ -36,20 +36,14 @@ export const GET = withErrorHandler(async () => {
 
 export const POST = withErrorHandler(async (request) => {
   const body = await request.json();
-  const parsed = createProjectSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
-    );
-  }
+  const { data: parsed, error } = parseBody(body, createProjectSchema);
+  if (error) return error;
 
   // Check uniqueness
   const existing = await db
     .select({ id: projects.id })
     .from(projects)
-    .where(eq(projects.name, parsed.data.name))
+    .where(eq(projects.name, parsed.name))
     .limit(1);
 
   if (existing.length > 0) {
@@ -62,8 +56,8 @@ export const POST = withErrorHandler(async (request) => {
   const [project] = await db
     .insert(projects)
     .values({
-      name: parsed.data.name,
-      description: parsed.data.description || null,
+      name: parsed.name,
+      description: parsed.description || null,
     })
     .returning();
 

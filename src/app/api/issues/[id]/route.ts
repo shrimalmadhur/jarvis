@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { execFileSync } from "node:child_process";
 import { db } from "@/lib/db";
 import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { withErrorHandler } from "@/lib/api/utils";
 import { getIssueAttachments, deleteIssueAttachmentFiles } from "@/lib/issues/attachments";
 import { refreshPrStatus } from "@/lib/issues/pr-status";
+import { removeWorktree } from "@/lib/issues/git-worktree";
 
 export const runtime = "nodejs";
 
@@ -179,18 +179,9 @@ export const DELETE = withErrorHandler(async (
 
   // Clean up worktree if it exists
   if (issue.worktreePath) {
-    try {
-      const [repo] = await db.select().from(repositories)
-        .where(eq(repositories.id, issue.repositoryId)).limit(1);
-      if (repo) {
-        execFileSync("git", ["worktree", "remove", issue.worktreePath, "--force"], {
-          cwd: repo.localRepoPath, stdio: "ignore",
-        });
-        execFileSync("git", ["worktree", "prune"], { cwd: repo.localRepoPath, stdio: "ignore" });
-      }
-    } catch {
-      // Best effort cleanup
-    }
+    const [repo] = await db.select().from(repositories)
+      .where(eq(repositories.id, issue.repositoryId)).limit(1);
+    if (repo) removeWorktree(issue.worktreePath, repo.localRepoPath);
   }
 
   // Clean up attachment files from disk (DB records cascade-deleted)

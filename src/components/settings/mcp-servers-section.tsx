@@ -156,8 +156,7 @@ interface MCPServer {
   enabled: boolean;
 }
 
-const inputClasses =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-border-hover input-focus";
+import { settingsInputClasses as inputClasses } from "@/components/shared/form-classes";
 
 function presetButtonClass(installed: boolean, isConfiguring: boolean): string {
   if (installed) return "cursor-default border-border/50 opacity-40";

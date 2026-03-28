@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { repositories, issues } from "@/lib/db/schema";
 import { eq, count, desc } from "drizzle-orm";
 import { createRepositorySchema } from "@/lib/validations/repository";
-import { withErrorHandler } from "@/lib/api/utils";
+import { withErrorHandler, parseBody } from "@/lib/api/utils";
 
 export const runtime = "nodejs";
 
@@ -42,20 +42,14 @@ export const GET = withErrorHandler(async () => {
 
 export const POST = withErrorHandler(async (request: Request) => {
   const body = await request.json();
-  const parsed = createRepositorySchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
-    );
-  }
+  const { data: parsed, error } = parseBody(body, createRepositorySchema);
+  if (error) return error;
 
   // Check uniqueness
   const existing = await db
     .select({ id: repositories.id })
     .from(repositories)
-    .where(eq(repositories.name, parsed.data.name))
+    .where(eq(repositories.name, parsed.name))
     .limit(1);
 
   if (existing.length > 0) {
@@ -66,7 +60,7 @@ export const POST = withErrorHandler(async (request: Request) => {
   }
 
   // Verify local path exists
-  if (!existsSync(parsed.data.localRepoPath)) {
+  if (!existsSync(parsed.localRepoPath)) {
     return NextResponse.json(
       { error: "Local repo path does not exist" },
       { status: 400 }
@@ -75,7 +69,7 @@ export const POST = withErrorHandler(async (request: Request) => {
 
   // Verify it's a git repo
   try {
-    execFileSync("git", ["rev-parse", "--git-dir"], { cwd: parsed.data.localRepoPath, stdio: "ignore" });
+    execFileSync("git", ["rev-parse", "--git-dir"], { cwd: parsed.localRepoPath, stdio: "ignore" });
   } catch {
     return NextResponse.json(
       { error: "Path is not a git repository" },
@@ -86,10 +80,10 @@ export const POST = withErrorHandler(async (request: Request) => {
   const [repo] = await db
     .insert(repositories)
     .values({
-      name: parsed.data.name,
-      githubRepoUrl: parsed.data.githubRepoUrl || null,
-      localRepoPath: parsed.data.localRepoPath,
-      defaultBranch: parsed.data.defaultBranch,
+      name: parsed.name,
+      githubRepoUrl: parsed.githubRepoUrl || null,
+      localRepoPath: parsed.localRepoPath,
+      defaultBranch: parsed.defaultBranch,
     })
     .returning();
 
