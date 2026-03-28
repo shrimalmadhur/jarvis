@@ -215,6 +215,121 @@ Extend Dobby's capabilities by adding MCP (Model Context Protocol) servers:
 2. Add an MCP server with its command and arguments
 3. Dobby connects to the server and makes its tools available in conversations
 
+## Slack Issue Setup
+
+Dobby can create and continue issues from Slack threads using **Slack Socket Mode**. The Slack integration lives under **Issues > Config** in the web UI and expects two tokens:
+
+- A **bot token** starting with `xoxb-`
+- An **app-level token** starting with `xapp-`
+
+Before configuring Slack, add at least one repository in **Issues > Config**. Slack issue creation uses the repository name from your message, for example `@bot repo-name: fix login redirect`.
+
+### What Slack Can Do
+
+Once configured:
+
+- Mention the bot in a channel to create an issue
+- Keep replying in that same Slack thread as the issue progresses
+- Continue a completed issue by replying in the same thread later
+
+Issue creation format:
+
+```text
+@bot repo-name: short or detailed description
+```
+
+The `repo-name` must match a repository you added in **Issues > Config**.
+
+### 1. Create the Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app for your workspace.
+2. Open **Socket Mode** and enable it.
+3. Create an **App-Level Token** with the scope `connections:write`.
+4. Save that token. This is the `xapp-...` token you will paste into Dobby.
+
+### 2. Add Bot Scopes
+
+Open **OAuth & Permissions** and add these bot token scopes:
+
+- `app_mentions:read`
+- `channels:history`
+- `groups:history`
+- `chat:write`
+
+Then install or reinstall the app to the workspace and copy the **Bot User OAuth Token**. This is the `xoxb-...` token you will paste into Dobby.
+
+Notes:
+
+- `channels:history` is required for public channels.
+- `groups:history` is required for private channels.
+- `chat:write` lets Dobby reply in the issue thread.
+- The app must be invited to each channel you want it to work in.
+
+### 3. Add Event Subscriptions
+
+Because this integration uses Socket Mode, Slack events are delivered over the app socket instead of a public HTTP webhook. In **Event Subscriptions**, enable events and subscribe to these bot events:
+
+- `app_mention`
+- `message.channels`
+- `message.groups`
+
+These are used for:
+
+- `app_mention`: create a new issue from `@bot repo-name: description`
+- `message.channels` / `message.groups`: capture replies inside the issue thread
+
+If you only plan to use public channels, `message.channels` is the important one. If you want private channels too, keep `message.groups` and make sure the bot is invited.
+
+### 4. Invite the Bot to the Channel
+
+In Slack, invite the app to the channel where you want issues to be created:
+
+```text
+/invite @your-bot-name
+```
+
+If you want Dobby to accept issue mentions from any joined channel, stop here. If you want to restrict issue creation to a single channel, copy that channel's ID and enter it in Dobby.
+
+### 5. Configure Dobby
+
+In Dobby, open **Issues > Config** and fill in:
+
+- **Bot token**: the `xoxb-...` token
+- **App token**: the `xapp-...` token
+- **Channel ID (optional)**: a Slack channel ID like `C0123456789`
+
+Then click **Save & Test**.
+
+Dobby immediately validates:
+
+- the bot token with Slack `auth.test`
+- the optional channel ID with `conversations.info`
+- the app token by opening a Socket Mode connection
+
+If the test passes, Dobby stores the config and starts the Slack socket listener automatically.
+
+### 6. Usage and Behavior
+
+- Start a new issue by mentioning the bot in a top-level channel message, not inside an existing thread.
+- Reply in the created thread to answer follow-up questions or continue the conversation.
+- Leave **Channel ID** blank if you want the bot to work in any channel it has joined.
+- File-only thread replies are not supported yet; include text in the reply.
+
+Example:
+
+```text
+@dobby-api web-app: the settings page crashes when saving profile changes
+```
+
+### Troubleshooting
+
+- `Invalid Slack bot token format`: the bot token must start with `xoxb-`.
+- `Invalid Slack app token format`: the app token must start with `xapp-`.
+- `channel_not_found` or channel test failures: confirm the channel ID is correct and the bot has been invited.
+- Mentions do nothing: make sure Socket Mode is enabled, the app is installed, and `app_mention` is subscribed.
+- Thread replies do nothing: make sure `message.channels` or `message.groups` is subscribed for the channel type you're using.
+- `Repository "..." not found`: add that repository name in **Issues > Config** or use the correct configured name in the Slack mention.
+
 ## Contributing
 
 1. Fork the repository and create a feature branch
