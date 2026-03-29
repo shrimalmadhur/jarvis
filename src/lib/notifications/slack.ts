@@ -75,12 +75,33 @@ export async function testSlackConnection(
   botToken: string,
   appToken: string,
   channelId?: string
-): Promise<void> {
+): Promise<{ warnings: string[] }> {
+  const warnings: string[] = [];
+
   await slackApi(botToken, "auth.test");
+
   if (channelId) {
     await slackApi(botToken, "conversations.info", { channel: channelId });
+
+    // Verify channels:history scope (necessary but not sufficient for thread replies)
+    try {
+      await slackApi(botToken, "conversations.history", {
+        channel: channelId,
+        limit: 1,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes("missing_scope") || errMsg.includes("not_allowed_token_type")) {
+        warnings.push(
+          "Bot lacks channels:history scope — thread replies won't work. " +
+          "Add this scope in your Slack app's OAuth & Permissions page."
+        );
+      }
+    }
   }
+
   await slackApi<{ url: string }>(appToken, "apps.connections.open");
+  return { warnings };
 }
 
 export async function openSlackSocket(appToken: string): Promise<string> {

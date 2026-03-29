@@ -37,6 +37,13 @@ interface SlackConfig {
   botToken: string | null;
   appToken: string | null;
   channelId: string | null;
+  diagnostics?: {
+    socketConnected: boolean;
+    appMentionReceived: boolean;
+    messageReceived: boolean;
+    threadRepliesMayNotWork: boolean;
+    uptimeMs: number;
+  };
 }
 
 export default function IssuesConfigPage() {
@@ -46,6 +53,7 @@ export default function IssuesConfigPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
@@ -307,6 +315,7 @@ export default function IssuesConfigPage() {
   async function handleSaveSlack() {
     setSavingSlack(true);
     setError(null);
+    setWarning(null);
     try {
       const res = await fetch("/api/issues/slack", {
         method: "POST",
@@ -324,9 +333,14 @@ export default function IssuesConfigPage() {
         return;
       }
 
+      const data = await res.json();
       setSlackBotToken("");
       setSlackAppToken("");
       setSlackChannelId("");
+
+      if (data.warnings?.length) {
+        setWarning(data.warnings.join(" "));
+      }
       showSuccess("Slack app configured and tested");
       await fetchAll();
     } catch {
@@ -396,6 +410,11 @@ export default function IssuesConfigPage() {
             [OK] {success}
           </div>
         )}
+        {warning && (
+          <div className="animate-type-in border border-amber-400/30 bg-amber-400/5 px-4 py-2.5 text-[14px] font-mono text-amber-400">
+            [WARN] {warning}
+          </div>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-[14px] font-mono font-bold text-accent uppercase tracking-widest">
@@ -421,6 +440,16 @@ export default function IssuesConfigPage() {
                   <div className="text-[14px] font-mono text-foreground">{slack.channelId || "any joined channel"}</div>
                 </div>
               </div>
+              {slack.diagnostics?.threadRepliesMayNotWork && (
+                <div className="rounded-md bg-amber-900/30 border border-amber-700 p-3 text-[12px] font-mono text-amber-200">
+                  <strong>Thread replies may not be working.</strong> The bot has received @mention events but no message events for over an hour. Make sure your Slack app subscribes to <code className="text-amber-400">message.channels</code> and <code className="text-amber-400">message.groups</code> under Event Subscriptions.
+                </div>
+              )}
+              {slack.diagnostics && !slack.diagnostics.threadRepliesMayNotWork && slack.diagnostics.uptimeMs < 3600_000 && (
+                <div className="text-[11px] font-mono text-muted">
+                  Diagnostics collecting (available after ~1 hour of uptime)
+                </div>
+              )}
               <div className="flex items-center justify-between pt-2 border-t border-border/40">
                 <span className="flex items-center gap-1.5 text-[12px] font-mono text-green">
                   <span className="h-1.5 w-1.5 rounded-full bg-green" />
@@ -472,8 +501,18 @@ export default function IssuesConfigPage() {
                   Restrict issue creation to one Slack channel, or leave blank to accept mentions in any channel the bot has joined.
                 </p>
               </div>
-              <div className="border border-border/50 bg-background/40 px-3 py-3 text-[12px] font-mono text-muted space-y-1">
-                <div>Required bot scopes: <span className="text-foreground">app_mentions:read</span>, <span className="text-foreground">channels:history</span>, <span className="text-foreground">groups:history</span>, <span className="text-foreground">chat:write</span></div>
+              <div className="border border-border/50 bg-background/40 px-3 py-3 text-[12px] font-mono text-muted space-y-2">
+                <div className="font-bold text-foreground">1. OAuth &amp; Permissions — add these Bot Token Scopes:</div>
+                <div className="ml-3 space-y-0.5">
+                  <div><span className="text-foreground">app_mentions:read</span>, <span className="text-foreground">channels:history</span>, <span className="text-foreground">groups:history</span>, <span className="text-foreground">chat:write</span></div>
+                </div>
+                <div className="font-bold text-foreground">2. Event Subscriptions — subscribe to these bot events:</div>
+                <div className="ml-3 space-y-0.5">
+                  <div><span className="text-foreground">app_mention</span> — for creating new issues via @mention</div>
+                  <div><span className="text-foreground">message.channels</span> — for thread replies in public channels</div>
+                  <div><span className="text-foreground">message.groups</span> — for thread replies in private channels</div>
+                </div>
+                <div className="text-amber-400">Without step 2, the bot will not see thread replies unless the user @mentions it.</div>
                 <div>Usage: mention the bot with <span className="text-foreground">@bot repo-name: description</span>. All replies should stay in that Slack thread.</div>
               </div>
               <button
