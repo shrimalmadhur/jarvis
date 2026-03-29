@@ -5,7 +5,7 @@ import {
   maskSlackToken,
   testSlackConnection,
 } from "@/lib/notifications/slack";
-import { ensureSlackIssuesSocketRunning, stopSlackIssuesSocket } from "@/lib/issues/slack-socket";
+import { ensureSlackIssuesSocketRunning, stopSlackIssuesSocket, getSlackEventDiagnostics, isSlackSocketConnected } from "@/lib/issues/slack-socket";
 import { upsertNotificationConfig, getNotificationConfig, deleteNotificationConfig } from "@/lib/db/notification-config";
 import { withErrorHandler } from "@/lib/api/utils";
 
@@ -21,12 +21,20 @@ export const GET = withErrorHandler(async () => {
   }
 
   const cfg = config.config as Record<string, string>;
+  const diagnostics = getSlackEventDiagnostics();
   return NextResponse.json({
     configured: true,
     enabled: config.enabled,
     botToken: cfg.bot_token ? maskSlackToken(cfg.bot_token) : null,
     appToken: cfg.app_token ? maskSlackToken(cfg.app_token) : null,
     channelId: cfg.channel_id || null,
+    diagnostics: {
+      socketConnected: isSlackSocketConnected(),
+      appMentionReceived: diagnostics.appMentionSeen,
+      messageReceived: diagnostics.messageSeen,
+      threadRepliesMayNotWork: diagnostics.threadRepliesMayNotWork,
+      uptimeMs: diagnostics.uptimeMs,
+    },
   });
 });
 
@@ -49,8 +57,10 @@ export const POST = withErrorHandler(async (request: Request) => {
     return NextResponse.json({ error: "Invalid Slack app token format" }, { status: 400 });
   }
 
+  let warnings: string[] = [];
   if (test) {
-    await testSlackConnection(botToken, appToken, channelId || undefined);
+    const result = await testSlackConnection(botToken, appToken, channelId || undefined);
+    warnings = result.warnings;
   }
 
   const config: Record<string, string> = {
@@ -63,7 +73,7 @@ export const POST = withErrorHandler(async (request: Request) => {
 
   ensureSlackIssuesSocketRunning();
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, warnings });
 });
 
 export const DELETE = withErrorHandler(async () => {

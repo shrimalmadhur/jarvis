@@ -48,6 +48,33 @@ const g = globalThis as unknown as {
 };
 g._slackIssueSocket ??= { running: false, starting: false, socket: null };
 
+// Event type diagnostic tracking (best-effort, resets on restart)
+const eventTypeTracker = {
+  startedAt: Date.now(),
+  firstAppMentionAt: 0,
+  firstMessageAt: 0,
+  lastWarningAt: 0,
+};
+
+export function getSlackEventDiagnostics(): {
+  appMentionSeen: boolean;
+  messageSeen: boolean;
+  threadRepliesMayNotWork: boolean;
+  uptimeMs: number;
+} {
+  const appMentionSeen = eventTypeTracker.firstAppMentionAt > 0;
+  const messageSeen = eventTypeTracker.firstMessageAt > 0;
+  // Only flag if we've been receiving app_mention events for >1 hour with zero message events
+  const threadRepliesMayNotWork = appMentionSeen && !messageSeen
+    && (Date.now() - eventTypeTracker.firstAppMentionAt > 3600_000);
+  return { appMentionSeen, messageSeen, threadRepliesMayNotWork, uptimeMs: Date.now() - eventTypeTracker.startedAt };
+}
+
+export function isSlackSocketConnected(): boolean {
+  const socket = g._slackIssueSocket?.socket;
+  return Boolean(socket && socket.readyState === WebSocket.OPEN);
+}
+
 export function ensureSlackIssuesSocketRunning(): void {
   if (g._slackIssueSocket!.running || g._slackIssueSocket!.starting) return;
   g._slackIssueSocket!.starting = true;
@@ -107,6 +134,14 @@ async function processSlackEvent(event: SlackEvent, config: IssuesSlackConfig): 
   if (config.channelId && event.channel !== config.channelId) {
     console.log("[slack-issues] Ignoring event from non-configured channel:", event.channel);
     return;
+  }
+
+  // Track event types for diagnostics (any message event proves message.channels subscription is active)
+  if (event.type === "app_mention" && !eventTypeTracker.firstAppMentionAt) {
+    eventTypeTracker.firstAppMentionAt = Date.now();
+  }
+  if (event.type === "message" && !eventTypeTracker.firstMessageAt) {
+    eventTypeTracker.firstMessageAt = Date.now();
   }
 
   if (event.type === "app_mention" && !event.thread_ts) {
@@ -244,8 +279,16 @@ async function handleSlackThreadReply(event: SlackEvent, config: IssuesSlackConf
   }
 
   if (issue.status === "completed") {
-    handleCompletedSlackReply(issue.id, stripSlackMentions(text!), config).catch((err) => {
+    handleCompletedSlackReply(issue.id, stripSlackMentions(text!), config).catch(async (err) => {
       console.error("[slack-issues] Failed to handle completed issue reply:", err);
+      try {
+        await sendSlackMessage(
+          { botToken: config.botToken },
+          event.channel,
+          "Something went wrong processing your reply. Please try again.",
+          event.thread_ts!
+        );
+      } catch { /* last resort — can't reach Slack */ }
     });
   }
 }
@@ -291,6 +334,19 @@ async function handleCompletedSlackReply(issueId: string, userText: string, conf
       return;
     }
 
+    // Send processing indicator before the long-running resumeSession call
+    try {
+      await sendSlackMessage(
+        { botToken: config.botToken },
+        issue.slackChannelId,
+        "Processing your reply...",
+        issue.slackThreadTs
+      );
+    } catch (indicatorErr) {
+      console.warn("[slack-issues] Failed to send processing indicator:", indicatorErr);
+      // Non-fatal — continue with reply processing
+    }
+
     const response = await resumeSession(sessionId, issue.worktreePath, userText);
     const displayText = (response.trim() || "(No text response)").substring(0, SLACK_SAFE_MSG_LEN);
     const botMessage = await sendSlackMessage(
@@ -308,14 +364,21 @@ async function handleCompletedSlackReply(issueId: string, userText: string, conf
     });
   } catch (err) {
     console.error(`[slack-issues] Error resuming session for issue ${issueId.substring(0, 8)}:`, err);
-    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId)).limit(1);
-    if (issue?.slackChannelId && issue.slackThreadTs) {
-      await sendSlackMessage(
-        { botToken: config.botToken },
-        issue.slackChannelId,
-        "Something went wrong processing your reply. Please try again.",
-        issue.slackThreadTs
-      );
+    try {
+      const [issue] = await db.select().from(issues).where(eq(issues.id, issueId)).limit(1);
+      if (issue?.slackChannelId && issue.slackThreadTs) {
+        const errorMsg = err instanceof Error && err.message.includes("timed out")
+          ? "The operation timed out. Your message was recorded — you can try again."
+          : "Something went wrong processing your reply. Please try again.";
+        await sendSlackMessage(
+          { botToken: config.botToken },
+          issue.slackChannelId,
+          errorMsg,
+          issue.slackThreadTs
+        );
+      }
+    } catch (innerErr) {
+      console.error(`[slack-issues] Failed to send error message for issue ${issueId.substring(0, 8)}:`, innerErr);
     }
   } finally {
     activeIssueResumes.delete(issueId);
@@ -334,6 +397,18 @@ async function runSocketSession(config: IssuesSlackConfig): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     const recoveryTimer = setInterval(() => {
+      const diag = getSlackEventDiagnostics();
+      if (diag.threadRepliesMayNotWork) {
+        const now = Date.now();
+        if (now - eventTypeTracker.lastWarningAt > 3600_000) {
+          console.warn(
+            "[slack-issues] WARNING: Receiving app_mention events but no message events " +
+            "for over 1 hour. Thread replies may not work. Verify that 'message.channels' " +
+            "and 'message.groups' are subscribed in your Slack app's Event Subscriptions page."
+          );
+          eventTypeTracker.lastWarningAt = now;
+        }
+      }
       void clearStaleLocks()
         .then(() => startPendingPipelines({ kind: "slack", ...config }))
         .then(() => startResumedPipelines({ kind: "slack", ...config }))
