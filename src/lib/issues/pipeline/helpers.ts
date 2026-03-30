@@ -4,9 +4,10 @@ import { issues, issueMessages } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { sendTelegramMessageWithId, escapeHtml, TELEGRAM_SAFE_MSG_LEN } from "@/lib/notifications/telegram";
 import { sendSlackMessage, SLACK_SAFE_MSG_LEN } from "@/lib/notifications/slack";
-import type { PipelinePhaseResult, IssueStatus, IssuesTransportConfig } from "../types";
+import type { IssueStatus, IssuesTransportConfig } from "../types";
 import { QA_TIMEOUT_MS, PHASE_TIMEOUT_MS } from "../types";
-import { runClaudePhase } from "./claude-runner";
+import { runPhase } from "@/lib/harness/run-phase";
+import type { HarnessType, HarnessPhaseResult } from "@/lib/harness/types";
 
 export function telegramMarkupToSlackText(text: string): string {
   return text
@@ -151,8 +152,8 @@ export async function getUserAnswers(issueId: string): Promise<string | null> {
   return messages.map(m => m.message).join("\n\n");
 }
 
-/** Extract a PipelinePhaseResult from a settled promise, returning a failure result on rejection. */
-export function settledResult(r: PromiseSettledResult<PipelinePhaseResult>): PipelinePhaseResult {
+/** Extract a HarnessPhaseResult from a settled promise, returning a failure result on rejection. */
+export function settledResult(r: PromiseSettledResult<HarnessPhaseResult>): HarnessPhaseResult {
   if (r.status === "fulfilled") return r.value;
   return { success: false, output: `Agent failed: ${String(r.reason)}` };
 }
@@ -243,16 +244,20 @@ export async function createFreshPlanningSession(
   workdir: string,
   prompt: string,
   issueId: string,
-): Promise<{ result: PipelinePhaseResult; sessionId: string }> {
+  harness?: HarnessType,
+): Promise<{ result: HarnessPhaseResult; sessionId: string }> {
   const sessionId = crypto.randomUUID();
-  const result = await runClaudePhase({
+  const result = await runPhase({
     workdir,
     prompt,
     systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
     timeoutMs: PHASE_TIMEOUT_MS,
     sessionId,
+    harness,
   });
-  await db.update(issues).set({ planningSessionId: sessionId, updatedAt: new Date() })
+  // For Codex, the actual session ID comes from the result (thread_id)
+  const effectiveSessionId = result.sessionId || sessionId;
+  await db.update(issues).set({ planningSessionId: effectiveSessionId, updatedAt: new Date() })
     .where(eq(issues.id, issueId));
-  return { result, sessionId };
+  return { result, sessionId: effectiveSessionId };
 }

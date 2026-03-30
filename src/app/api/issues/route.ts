@@ -112,6 +112,7 @@ export const POST = withErrorHandler(async (request: Request) => {
     repositoryId: parsed.repositoryId,
     title: parsed.title,
     description: parsed.description,
+    ...(parsed.harness ? { harness: parsed.harness } : {}),
   }).returning();
 
   return NextResponse.json(issue, { status: 201 });

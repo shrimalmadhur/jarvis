@@ -1,5 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
+import { resolveCodexPath } from "@/lib/harness/resolve-codex-path";
+import { buildCodexEnv } from "@/lib/harness/codex-harness";
+import { buildClaudeEnv } from "@/lib/harness/claude-harness";
+import { getDefaultHarness } from "@/lib/harness/run-phase";
+import type { HarnessType } from "@/lib/harness/types";
 
 export const runtime = "nodejs";
 
@@ -10,9 +15,9 @@ const MAX_CONCURRENT = 3;
 /**
  * POST /api/claude/prompt
  *
- * Spawns `claude -p` CLI to generate a response, streamed back via SSE.
+ * Spawns a CLI (claude or codex) to generate a response, streamed back via SSE.
  * Requires DOBBY_PASSWORD or DOBBY_API_SECRET if configured.
- * Body: { prompt: string, systemPrompt?: string, model?: string }
+ * Body: { prompt: string, systemPrompt?: string, model?: string, harness?: "claude" | "codex" }
  */
 export async function POST(request: Request) {
   // Auth gate: require password/secret if configured
@@ -37,7 +42,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { prompt, systemPrompt, model } = await request.json();
+  const { prompt, systemPrompt, model, harness: requestedHarness } = await request.json();
 
   if (!prompt) {
     return new Response(JSON.stringify({ error: "Prompt is required" }), {
@@ -54,20 +59,9 @@ export async function POST(request: Request) {
     });
   }
 
-  const args = [
-    "-p",
-    "--verbose",
-    "--output-format", "stream-json",
-    "--dangerously-skip-permissions",
-  ];
-
-  if (systemPrompt) {
-    args.push("--append-system-prompt", systemPrompt);
-  }
-
-  if (model) {
-    args.push("--model", model);
-  }
+  const harness: HarnessType = requestedHarness === "codex" || requestedHarness === "claude"
+    ? requestedHarness
+    : getDefaultHarness();
 
   let proc: ChildProcess | null = null;
   let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -90,82 +84,145 @@ export async function POST(request: Request) {
         controller.close();
       };
 
-      const claudePath = resolveClaudePath();
-      proc = spawn(claudePath, args, {
-        env: { ...process.env, FORCE_COLOR: "0" },
-      });
+      if (harness === "codex") {
+        // ── Codex CLI ──
+        const args = [
+          "exec", "--json",
+          "--dangerously-bypass-approvals-and-sandbox",
+          "--skip-git-repo-check",
+          "--ephemeral",
+          "-",
+        ];
+        if (model) args.splice(2, 0, "-m", model);
 
-      // Timeout to kill hung processes
-      timeout = setTimeout(() => {
-        proc?.kill("SIGTERM");
-      }, TIMEOUT_MS);
+        // Codex has no --append-system-prompt: prepend to prompt
+        let fullPrompt = prompt;
+        if (systemPrompt) {
+          fullPrompt = `## System Instructions\n${systemPrompt}\n\n## Task\n${prompt}`;
+        }
 
-      proc.stdin!.write(prompt);
-      proc.stdin!.end();
+        proc = spawn(resolveCodexPath(), args, {
+          env: buildCodexEnv(),
+        });
 
-      let buffer = "";
+        timeout = setTimeout(() => { proc?.kill("SIGTERM"); }, TIMEOUT_MS);
 
-      proc.stdout!.on("data", (chunk: Buffer) => {
-        buffer += chunk.toString();
+        proc.stdin!.write(fullPrompt);
+        proc.stdin!.end();
 
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        let buffer = "";
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        proc.stdout!.on("data", (chunk: Buffer) => {
+          buffer += chunk.toString();
+          if (buffer.length > 1_000_000) buffer = buffer.slice(-500_000);
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-          try {
-            const event = JSON.parse(trimmed);
-
-            if (event.type === "assistant" && event.message) {
-              const msg = event.message;
-              if (msg.content && Array.isArray(msg.content)) {
-                for (const block of msg.content) {
-                  if (block.type === "text" && block.text) {
-                    safeEnqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: "text", text: block.text })}\n\n`)
-                    );
-                  }
-                }
-              } else if (typeof msg.content === "string" && msg.content) {
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const event = JSON.parse(trimmed);
+              if (event.type === "item.completed" && event.item?.type === "agent_message" && event.item?.text) {
                 safeEnqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: "text", text: msg.content })}\n\n`)
+                  encoder.encode(`data: ${JSON.stringify({ type: "result", text: event.item.text })}\n\n`)
                 );
               }
-            }
-
-            if (event.type === "result" && event.result) {
-              safeEnqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "result", text: event.result })}\n\n`)
-              );
-            }
-          } catch {
-            // Not valid JSON yet, skip
+            } catch { /* skip non-JSON */ }
           }
+        });
+
+        proc.stderr!.on("data", () => { /* log server-side only */ });
+
+        proc.on("close", (code: number | null) => {
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", code })}\n\n`));
+          cleanup();
+        });
+
+        proc.on("error", (err: Error) => {
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", text: err.message })}\n\n`));
+          cleanup();
+        });
+      } else {
+        // ── Claude CLI ──
+        const args = [
+          "-p",
+          "--verbose",
+          "--output-format", "stream-json",
+          "--dangerously-skip-permissions",
+        ];
+
+        if (systemPrompt) {
+          args.push("--append-system-prompt", systemPrompt);
         }
-      });
 
-      proc.stderr!.on("data", () => {
-        // Log server-side only, don't forward to client
-      });
+        if (model) {
+          args.push("--model", model);
+        }
 
-      proc.on("close", (code: number | null) => {
-        safeEnqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "done", code })}\n\n`)
-        );
-        cleanup();
-      });
+        const claudePath = resolveClaudePath();
+        proc = spawn(claudePath, args, {
+          env: buildClaudeEnv(),
+        });
 
-      proc.on("error", (err: Error) => {
-        safeEnqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "error", text: err.message })}\n\n`)
-        );
-        cleanup();
-      });
+        timeout = setTimeout(() => { proc?.kill("SIGTERM"); }, TIMEOUT_MS);
+
+        proc.stdin!.write(prompt);
+        proc.stdin!.end();
+
+        let buffer = "";
+
+        proc.stdout!.on("data", (chunk: Buffer) => {
+          buffer += chunk.toString();
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const event = JSON.parse(trimmed);
+
+              if (event.type === "assistant" && event.message) {
+                const msg = event.message;
+                if (msg.content && Array.isArray(msg.content)) {
+                  for (const block of msg.content) {
+                    if (block.type === "text" && block.text) {
+                      safeEnqueue(
+                        encoder.encode(`data: ${JSON.stringify({ type: "text", text: block.text })}\n\n`)
+                      );
+                    }
+                  }
+                } else if (typeof msg.content === "string" && msg.content) {
+                  safeEnqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: "text", text: msg.content })}\n\n`)
+                  );
+                }
+              }
+
+              if (event.type === "result" && event.result) {
+                safeEnqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: "result", text: event.result })}\n\n`)
+                );
+              }
+            } catch { /* skip non-JSON */ }
+          }
+        });
+
+        proc.stderr!.on("data", () => { /* log server-side only */ });
+
+        proc.on("close", (code: number | null) => {
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", code })}\n\n`));
+          cleanup();
+        });
+
+        proc.on("error", (err: Error) => {
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", text: err.message })}\n\n`));
+          cleanup();
+        });
+      }
     },
     cancel() {
-      // Kill child process when client disconnects
       if (timeout) clearTimeout(timeout);
       proc?.kill("SIGTERM");
     },

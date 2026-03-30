@@ -3,8 +3,12 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentDefinition, RunResult, ToolUseLog } from "./types";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
+import { resolveCodexPath } from "@/lib/harness/resolve-codex-path";
+import { getDefaultHarness } from "@/lib/harness/run-phase";
+import type { HarnessType } from "@/lib/harness/types";
 import type { RunEvent } from "./run-events";
 import { readWorkspaceMemory, formatMemoryForPrompt, MEMORY_CONTEXT_NOTE, AGENT_OUTPUT_RULES, updateMemoryAfterRun, buildChildEnv, hasWorkspaceArchive } from "./agent-memory";
+import { buildCodexEnv } from "@/lib/harness/codex-harness";
 import { encodeProjectDir } from "@/lib/claude/utils";
 
 /** State accumulated while processing JSONL stream events from Claude CLI */
@@ -117,6 +121,40 @@ function processStreamEvent(
   }
 }
 
+/** Process a single parsed JSONL event from the Codex CLI stream */
+function processCodexStreamEvent(
+  event: Record<string, unknown>,
+  state: StreamState,
+  onEvent?: (event: RunEvent) => void
+): void {
+  if (event.type === "thread.started" && event.thread_id) {
+    // Capture session ID (thread_id) — no Claude equivalent
+    return;
+  }
+
+  if (event.type === "item.completed") {
+    const item = event.item as Record<string, unknown> | undefined;
+    if (item?.type === "agent_message" && typeof item.text === "string") {
+      state.assistantTextBlocks.push(item.text);
+      onEvent?.({
+        type: "text",
+        timestamp: Date.now(),
+        data: { text: item.text },
+      });
+    }
+    return;
+  }
+
+  if (event.type === "turn.completed") {
+    const usage = event.usage as Record<string, number> | undefined;
+    if (usage) {
+      state.promptTokens = usage.input_tokens || 0;
+      state.completionTokens = usage.output_tokens || 0;
+    }
+    return;
+  }
+}
+
 /** Build fallback output from assistant text blocks, capped at maxChars */
 function buildFallbackOutput(blocks: string[], maxChars: number): string {
   let output = blocks.length > 0 ? blocks.join("\n\n") : "";
@@ -219,23 +257,44 @@ export async function runAgentTask(
   const sessionId = crypto.randomUUID();
   const sessionProjectDir = encodeProjectDir(workspaceDir);
 
-  const args = [
-    "-p",
-    "--verbose",
-    "--output-format", "stream-json",
-    "--dangerously-skip-permissions",
-    "--session-id", sessionId,
-    "--append-system-prompt", systemPrompt,
-  ];
+  // Determine which harness to use
+  const harness: HarnessType = definition.config.harness || getDefaultHarness();
+  const isCodex = harness === "codex";
 
-  const childEnv = buildChildEnv(definition.config.envVars);
+  const binaryPath = isCodex ? resolveCodexPath() : resolveClaudePath();
+  const args = isCodex
+    ? [
+        "exec", "--json",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--cd", workspaceDir,
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "-",
+      ]
+    : [
+        "-p",
+        "--verbose",
+        "--output-format", "stream-json",
+        "--dangerously-skip-permissions",
+        "--session-id", sessionId,
+        "--append-system-prompt", systemPrompt,
+      ];
+
+  const childEnv = isCodex
+    ? buildCodexEnv(definition.config.envVars)
+    : buildChildEnv(definition.config.envVars);
+
+  // For Codex: prepend system prompt into user prompt (no --append-system-prompt flag)
+  const stdinContent = isCodex
+    ? `## System Instructions\n${systemPrompt}\n\n${prompt}`
+    : prompt;
 
   const AGENT_TIMEOUT_MS = 10 * 60 * 1000;   // 10 minutes
   const MAX_FALLBACK_CHARS = 50_000;           // 50KB cap on fallback output
 
   // Phase 1: Run the main agent
   const result = await new Promise<RunResult>((resolve) => {
-    const proc: ChildProcess = spawn(resolveClaudePath(), args, {
+    const proc: ChildProcess = spawn(binaryPath, args, {
       env: childEnv,
       cwd: workspaceDir,
     });
@@ -246,11 +305,13 @@ export async function runAgentTask(
       proc.kill("SIGTERM");
     }, AGENT_TIMEOUT_MS);
 
-    proc.stdin!.write(prompt);
+    proc.stdin!.write(stdinContent);
     proc.stdin!.end();
 
     let buffer = "";
     const state = createStreamState();
+    let codexThreadId: string | undefined;
+    const processEvent = isCodex ? processCodexStreamEvent : processStreamEvent;
 
     proc.stdout!.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
@@ -261,7 +322,12 @@ export async function runAgentTask(
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
-          processStreamEvent(JSON.parse(trimmed), state, onEvent);
+          const event = JSON.parse(trimmed);
+          // Capture Codex thread_id for session tracking
+          if (isCodex && event.type === "thread.started" && event.thread_id) {
+            codexThreadId = event.thread_id;
+          }
+          processEvent(event, state, onEvent);
         } catch {
           // Not valid JSON, skip
         }
@@ -279,12 +345,12 @@ export async function runAgentTask(
       agentId: definition.agentId,
       success,
       output: success ? (state.resultText.trim() || buildFallbackOutput(state.assistantTextBlocks, MAX_FALLBACK_CHARS)) : "",
-      model: state.model,
+      model: isCodex ? "codex" : state.model,
       tokensUsed: { prompt: state.promptTokens, completion: state.completionTokens },
       toolUses: state.toolUses,
       durationMs,
-      claudeSessionId: sessionId,
-      claudeSessionProjectDir: sessionProjectDir,
+      claudeSessionId: isCodex ? codexThreadId : sessionId,
+      claudeSessionProjectDir: isCodex ? undefined : sessionProjectDir,
       ...(error ? { error } : {}),
     });
 
@@ -325,6 +391,7 @@ export async function runAgentTask(
         runOutput: result.output,
         skill: definition.skill,
         envVars: definition.config.envVars,
+        harness,
       });
 
       onEvent?.({

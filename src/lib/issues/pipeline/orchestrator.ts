@@ -6,12 +6,14 @@ import { issues, issueMessages, repositories } from "@/lib/db/schema";
 import { getIssueAttachments } from "../attachments";
 import { eq } from "drizzle-orm";
 import { escapeHtml, sendTelegramMessageWithId } from "@/lib/notifications/telegram";
-import type { IssuesTransportConfig, PipelinePhaseResult } from "../types";
+import type { IssuesTransportConfig } from "../types";
 import {
   PHASE_STATUS_MAP, MAX_PLAN_ITERATIONS, MAX_CODE_REVIEW_ITERATIONS,
   PHASE_TIMEOUT_MS, IMPL_TIMEOUT_MS,
 } from "../types";
-import { runClaudePhase, isResumeSupported, MAX_FALLBACK_CHARS } from "./claude-runner";
+import { isResumeSupported, MAX_FALLBACK_CHARS } from "./claude-runner";
+import { runPhase } from "@/lib/harness/run-phase";
+import type { HarnessType, HarnessPhaseResult } from "@/lib/harness/types";
 import {
   updatePhase, failIssue, isCancelled, sendIssueTransportMessage, notify,
   handleQuestions, getUserAnswers, settledResult,
@@ -62,39 +64,48 @@ export async function runIssuePipeline(
     return;
   }
 
+  // Determine which coding harness to use for this issue
+  const issueHarness: HarnessType = (issue.harness as HarnessType) || "claude";
+
   // Create or reuse worktree
   const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 40);
   const shortId = issue.id.substring(0, 8);
-  let branchName = issue.branchName || `issue/${slug}-${shortId}`;
+  const worktreeName = `${slug}-${shortId}`;
+  let branchName = issue.branchName || `issue/${worktreeName}`;
   let worktreeDir = issue.worktreePath || buildWorktreePath(repo.localRepoPath, slug, shortId);
 
-  // Skip worktree creation if it already exists (retry/resume scenario)
+  // For Codex: create worktree manually (Codex has no -w flag).
+  // For Claude: -w flag on first phase creates it, but we still need the dir for
+  // subsequent phases. Pre-create if it doesn't exist on resume/retry.
   if (!existsSync(worktreeDir)) {
-    mkdirSync(join(repo.localRepoPath, ".claude", "worktrees"), { recursive: true });
+    if (issueHarness === "codex") {
+      // Codex: full manual worktree creation
+      mkdirSync(join(repo.localRepoPath, ".claude", "worktrees"), { recursive: true });
 
-    // Fetch latest default branch so worktree starts from current remote code
-    try {
-      execFileSync("git", ["fetch", "origin", repo.defaultBranch], {
-        cwd: repo.localRepoPath, stdio: "ignore", timeout: 30_000,
-      });
-    } catch {
-      console.warn(`[pipeline] Could not fetch latest ${repo.defaultBranch} — will use last-known origin/${repo.defaultBranch}`);
-    }
-
-    try {
-      execFileSync("git", ["worktree", "add", worktreeDir, "-b", branchName, `origin/${repo.defaultBranch}`], {
-        cwd: repo.localRepoPath, stdio: "ignore",
-      });
-    } catch {
       try {
-        execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
+        execFileSync("git", ["fetch", "origin", repo.defaultBranch], {
+          cwd: repo.localRepoPath, stdio: "ignore", timeout: 30_000,
+        });
+      } catch {
+        console.warn(`[pipeline] Could not fetch latest ${repo.defaultBranch} — will use last-known origin/${repo.defaultBranch}`);
+      }
+
+      try {
+        execFileSync("git", ["worktree", "add", worktreeDir, "-b", branchName, `origin/${repo.defaultBranch}`], {
           cwd: repo.localRepoPath, stdio: "ignore",
         });
-      } catch (e) {
-        await failIssue(issueId, `Failed to create worktree: ${e}`);
-        return;
+      } catch {
+        try {
+          execFileSync("git", ["worktree", "add", worktreeDir, branchName], {
+            cwd: repo.localRepoPath, stdio: "ignore",
+          });
+        } catch (e) {
+          await failIssue(issueId, `Failed to create worktree: ${e}`);
+          return;
+        }
       }
     }
+    // Claude: worktree will be created by -w flag on the first phase
   }
 
   const phaseSessionIds: Record<string, string> = issue.phaseSessionIds as Record<string, string> || {};
@@ -102,8 +113,8 @@ export async function runIssuePipeline(
   // Determine start phase (resume support)
   const startPhase = issue.currentPhase > 0 ? issue.currentPhase : 1;
 
-  // Check if --resume is supported (cached in appSettings, globalThis for HMR)
-  const resumeSupported = await isResumeSupported();
+  // Check if --resume is supported. Codex always supports resume.
+  const resumeSupported = issueHarness === "codex" ? true : await isResumeSupported();
 
   // Living planning session: created in Phase 1 iter 1, resumed across iterations + Phase 4
   let planningSessionId = issue.planningSessionId || crypto.randomUUID();
@@ -145,40 +156,49 @@ export async function runIssuePipeline(
           );
 
           // Run Phase 1 — create, resume, or fresh fallback
-          let planResult: PipelinePhaseResult;
+          let planResult: HarnessPhaseResult;
 
           if (isFirstPlanRun) {
             // CREATE the planning session
-            planResult = await runClaudePhase({
-              workdir: worktreeDir,
+            planResult = await runPhase({
+              workdir: issueHarness === "claude" ? repo.localRepoPath : worktreeDir,
               prompt: freshPrompt,
               systemPrompt: "You are an expert implementation planner. Create detailed, actionable plans.",
               timeoutMs: PHASE_TIMEOUT_MS,
               sessionId: planningSessionId,
+              harness: issueHarness,
+              // Claude: let -w create the worktree; Codex: already created manually
+              worktreeName: issueHarness === "claude" && !existsSync(worktreeDir) ? worktreeName : undefined,
             });
             isFirstPlanRun = false;
+            // Update planningSessionId to the actual session ID returned by the harness
+            // (critical for Codex, which generates its own thread_id instead of using the passed-in UUID)
+            if (planResult.sessionId) {
+              planningSessionId = planResult.sessionId;
+            }
           } else if (resumeSupported) {
             // RESUME the planning session (keeps exploration context!)
             const resumePrompt = buildResumePlanningPrompt(
               currentIssue?.planReview1, currentIssue?.planReview2, userAnswers, attachmentPaths,
             );
-            planResult = await runClaudePhase({
+            planResult = await runPhase({
               workdir: worktreeDir,
               prompt: resumePrompt,
               timeoutMs: PHASE_TIMEOUT_MS,
               resumeSessionId: planningSessionId,
+              harness: issueHarness,
             });
 
             // If resume failed (not timeout), fall back to fresh session with full context
             if (!planResult.success && !planResult.timedOut) {
               console.log("[pipeline] Planning resume failed, falling back to fresh session");
-              const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
+              const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId, issueHarness);
               planResult = fresh.result;
               planningSessionId = fresh.sessionId;
             }
           } else {
             // Resume not supported — fresh session each iteration (current behavior)
-            const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId);
+            const fresh = await createFreshPlanningSession(worktreeDir, freshPrompt, issueId, issueHarness);
             planResult = fresh.result;
             planningSessionId = fresh.sessionId;
           }
@@ -227,13 +247,13 @@ export async function runIssuePipeline(
           : undefined;
 
         const planReviewResults = await Promise.allSettled([
-          runClaudePhase({
+          runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: buildAdversarialReviewPrompt(planOutput, priorFindingsText),
             systemPrompt: "You are an adversarial plan reviewer. Find problems, not validate.",
             timeoutMs: PHASE_TIMEOUT_MS,
           }),
-          runClaudePhase({
+          runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: buildCompletenessReviewPrompt(planOutput, priorFindingsText),
             systemPrompt: "You are a completeness and feasibility reviewer. Find gaps.",
@@ -312,7 +332,7 @@ export async function runIssuePipeline(
 
           // Always use a fresh session for fixes — resumed sessions respond
           // conversationally and fail to produce structured plan output
-          const fixResult = await runClaudePhase({
+          const fixResult = await runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: fixPrompt,
             systemPrompt: "You are an expert plan fixer. Surgically revise the plan to address all review findings. Output ONLY the complete revised plan text with no commentary.",
@@ -385,10 +405,10 @@ export async function runIssuePipeline(
         resumeSupported
       );
 
-      let implResult: Awaited<ReturnType<typeof runClaudePhase>>;
+      let implResult: HarnessPhaseResult;
 
       if (canResume) {
-        implResult = await runClaudePhase({
+        implResult = await runPhase({ harness: issueHarness,
           workdir: worktreeDir,
           prompt: implPrompt,
           timeoutMs: IMPL_TIMEOUT_MS,
@@ -398,7 +418,7 @@ export async function runIssuePipeline(
         // If resume failed (not timeout), retry with fresh session
         if (!implResult.success && !implResult.timedOut) {
           console.log("[pipeline] Implementation resume failed, retrying with fresh session");
-          implResult = await runClaudePhase({
+          implResult = await runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: implPrompt,
             systemPrompt: "You are an expert software engineer. Implement the plan precisely.",
@@ -407,7 +427,7 @@ export async function runIssuePipeline(
         }
       } else {
         // Fresh session (crash recovery, retry, or resume not supported)
-        implResult = await runClaudePhase({
+        implResult = await runPhase({ harness: issueHarness,
           workdir: worktreeDir,
           prompt: implPrompt,
           systemPrompt: "You are an expert software engineer. Implement the plan precisely.",
@@ -450,19 +470,19 @@ export async function runIssuePipeline(
         );
 
         const codeReviewResults = await Promise.allSettled([
-          runClaudePhase({
+          runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: buildBugsLogicReviewPrompt(repo.defaultBranch),
             systemPrompt: "You are a bugs & logic reviewer. DO NOT modify files.",
             timeoutMs: PHASE_TIMEOUT_MS,
           }),
-          runClaudePhase({
+          runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: buildSecurityEdgeCasesReviewPrompt(repo.defaultBranch),
             systemPrompt: "You are a security reviewer. DO NOT modify files.",
             timeoutMs: PHASE_TIMEOUT_MS,
           }),
-          runClaudePhase({
+          runPhase({ harness: issueHarness,
             workdir: worktreeDir,
             prompt: buildDesignPerformanceReviewPrompt(repo.defaultBranch),
             systemPrompt: "You are a design & performance reviewer. DO NOT modify files.",
@@ -532,7 +552,7 @@ export async function runIssuePipeline(
           }).trim();
         } catch { /* ignore */ }
 
-        const fixResult = await runClaudePhase({
+        const fixResult = await runPhase({ harness: issueHarness,
           workdir: worktreeDir,
           prompt: buildCodeFixPrompt(
             repo.defaultBranch,
@@ -601,7 +621,7 @@ export async function runIssuePipeline(
 
       const prAttachments = await getIssueAttachments(issueId);
       const prAttachmentPaths = prAttachments.map(a => a.filePath);
-      const prResult = await runClaudePhase({
+      const prResult = await runPhase({ harness: issueHarness,
         workdir: worktreeDir,
         prompt: buildPrCreationPrompt(issue.title, issue.description, repo.defaultBranch, prAttachmentPaths),
         systemPrompt: "Create a pull request using the gh CLI.",

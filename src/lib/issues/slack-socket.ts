@@ -96,14 +96,18 @@ function stripSlackMentions(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/g, "").trim();
 }
 
-export function parseSlackIssueMessage(text: string): { repoName: string; description: string } | null {
+export function parseSlackIssueMessage(text: string): { repoName: string; description: string; harness?: "claude" | "codex" } | null {
   const cleaned = stripSlackMentions(text);
   const match = cleaned.match(/^([^\s:]+)[:\s]+([\s\S]+)/);
   if (!match) return null;
-  return {
-    repoName: match[1].trim(),
-    description: match[2].trim(),
-  };
+  let description = match[2].trim();
+  let harness: "claude" | "codex" | undefined;
+  const flagMatch = description.match(/\s*\[harness:(codex|claude)\]\s*$/i);
+  if (flagMatch) {
+    harness = flagMatch[1].toLowerCase() as "claude" | "codex";
+    description = description.replace(/\s*\[harness:(codex|claude)\]\s*$/i, "").trim();
+  }
+  return { repoName: match[1].trim(), description, harness };
 }
 
 async function processSlackEvent(event: SlackEvent, config: IssuesSlackConfig): Promise<void> {
@@ -213,6 +217,7 @@ async function handleNewSlackIssue(
     description: parsed.description,
     slackChannelId: event.channel,
     slackThreadTs: event.ts,
+    ...(parsed.harness ? { harness: parsed.harness } : {}),
   }).returning();
 
   console.log("[slack-issues] Created issue from Slack mention:", issue.id);
@@ -347,7 +352,9 @@ async function handleCompletedSlackReply(issueId: string, userText: string, conf
       // Non-fatal — continue with reply processing
     }
 
-    const response = await resumeSession(sessionId, issue.worktreePath, userText);
+    const response = await resumeSession(sessionId, issue.worktreePath, userText, {
+      harness: (issue.harness as "claude" | "codex") || "claude",
+    });
     const displayText = (response.trim() || "(No text response)").substring(0, SLACK_SAFE_MSG_LEN);
     const botMessage = await sendSlackMessage(
       { botToken: config.botToken },

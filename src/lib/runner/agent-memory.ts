@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, statSync } fro
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { resolveClaudePath } from "@/lib/utils/resolve-claude-path";
+import { resolveCodexPath } from "@/lib/harness/resolve-codex-path";
+import { buildCodexEnv } from "@/lib/harness/codex-harness";
 
 const MEMORY_FILE = "memory.md";
 const ARCHIVE_FILE = "memory-archive.md";
@@ -172,8 +174,9 @@ export async function updateMemoryAfterRun(opts: {
   runOutput: string;
   skill: string;
   envVars?: Record<string, string>;
+  harness?: "claude" | "codex";
 }): Promise<void> {
-  const { workspaceDir, currentMemory, runOutput, skill, envVars } = opts;
+  const { workspaceDir, currentMemory, runOutput, skill, envVars, harness } = opts;
 
   const memorySection = extractMemorySection(skill);
   const trackingInstructions = memorySection
@@ -240,14 +243,13 @@ export async function updateMemoryAfterRun(opts: {
     ...(needsCompaction ? [] : [`- If you don't need to archive anything, do NOT include the ${ARCHIVE_DELIMITER} line.`]),
   ].join("\n");
 
-  const args = [
-    "-p",
-    "--output-format", "text",
-    "--no-session-persistence",
-    "--max-turns", "1",
-  ];
+  const isCodex = harness === "codex";
+  const binaryPath = isCodex ? resolveCodexPath() : resolveClaudePath();
+  const args = isCodex
+    ? ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--ephemeral", "--skip-git-repo-check", "--cd", workspaceDir, "-"]
+    : ["-p", "--output-format", "text", "--no-session-persistence", "--max-turns", "1"];
 
-  const childEnv = buildChildEnv(envVars);
+  const childEnv = isCodex ? buildCodexEnv(envVars) : buildChildEnv(envVars);
 
   // Cap on sub-agent output to prevent memory exhaustion
   const maxSubAgentOutput = MAX_MEMORY_CHARS * 2;
@@ -255,7 +257,7 @@ export async function updateMemoryAfterRun(opts: {
   return new Promise<void>((resolve, reject) => {
     let settled = false;
 
-    const proc = spawn(resolveClaudePath(), args, {
+    const proc = spawn(binaryPath, args, {
       env: childEnv,
       cwd: workspaceDir,
     });
@@ -272,13 +274,36 @@ export async function updateMemoryAfterRun(opts: {
 
     let output = "";
 
-    proc.stdout!.on("data", (chunk: Buffer) => {
-      if (output.length >= maxSubAgentOutput) return;
-      output += chunk.toString();
-      if (output.length > maxSubAgentOutput) {
-        output = output.substring(0, maxSubAgentOutput);
-      }
-    });
+    if (isCodex) {
+      // Codex returns JSONL — extract text from agent_message items
+      let buffer = "";
+      proc.stdout!.on("data", (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const event = JSON.parse(trimmed);
+            if (event.type === "item.completed" && event.item?.type === "agent_message" && event.item?.text) {
+              if (output.length < maxSubAgentOutput) {
+                output += event.item.text;
+              }
+            }
+          } catch { /* skip */ }
+        }
+      });
+    } else {
+      // Claude returns plain text
+      proc.stdout!.on("data", (chunk: Buffer) => {
+        if (output.length >= maxSubAgentOutput) return;
+        output += chunk.toString();
+        if (output.length > maxSubAgentOutput) {
+          output = output.substring(0, maxSubAgentOutput);
+        }
+      });
+    }
 
     proc.stderr!.on("data", () => {
       // Ignore stderr from sub-agent

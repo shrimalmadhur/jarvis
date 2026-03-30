@@ -78,16 +78,21 @@ export async function pollTelegramUpdates(
 
 /**
  * Parse a Telegram message for issue creation.
- * Format: /issue RepoName: description of the issue
+ * Format: /issue RepoName: description of the issue [harness:codex]
  * Returns null if message doesn't match the format.
+ * Optional [harness:codex] or [harness:claude] tag overrides the default coding harness.
  */
-export function parseIssueMessage(text: string): { repoName: string; description: string } | null {
+export function parseIssueMessage(text: string): { repoName: string; description: string; harness?: "claude" | "codex" } | null {
   const match = text.match(/^\/issue\s+([^\s:]+)[:\s]+([\s\S]+)/);
   if (!match) return null;
-  return {
-    repoName: match[1].trim(),
-    description: match[2].trim(),
-  };
+  let description = match[2].trim();
+  let harness: "claude" | "codex" | undefined;
+  const flagMatch = description.match(/\s*\[harness:(codex|claude)\]\s*$/i);
+  if (flagMatch) {
+    harness = flagMatch[1].toLowerCase() as "claude" | "codex";
+    description = description.replace(/\s*\[harness:(codex|claude)\]\s*$/i, "").trim();
+  }
+  return { repoName: match[1].trim(), description, harness };
 }
 
 /**
@@ -191,6 +196,7 @@ export async function processTelegramUpdate(
     description: parsed.description,
     telegramMessageId: msg.message_id,
     telegramChatId: String(msg.chat.id),
+    ...(parsed.harness ? { harness: parsed.harness } : {}),
   }).returning();
 
   // Download and save attached photos (non-fatal on failure)
@@ -267,7 +273,9 @@ async function handleCompletedIssueReply(
 
     console.log(`[poller] Resuming session for completed issue ${issueId.substring(0, 8)}: "${userText.substring(0, 80)}${userText.length > 80 ? "..." : ""}"`);
 
-    const response = await resumeSession(sessionId, issue.worktreePath, userText);
+    const response = await resumeSession(sessionId, issue.worktreePath, userText, {
+      harness: (issue.harness as "claude" | "codex") || "claude",
+    });
 
     // Guard against empty responses (e.g., tool-only runs with no text output)
     const displayText = response.trim() || "(No text response)";
