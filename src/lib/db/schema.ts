@@ -116,6 +116,7 @@ export const agents = sqliteTable("agents", {
   schedule: text("schedule").notNull(),
   timezone: text("timezone"),
   envVars: text("env_vars", { mode: "json" }).$type<Record<string, string>>().default({}),
+  harness: text("harness"),  // null = use global default; "claude" | "codex"
   createdAt: integer("created_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()).notNull(),
 });
@@ -273,6 +274,7 @@ export const issues = sqliteTable("issues", {
   planningSessionId: text("planning_session_id"),
   worktreePath: text("worktree_path"),
   branchName: text("branch_name"),
+  harness: text("harness").default("claude"),  // "claude" | "codex"
   error: text("error"),
   lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
   lockedBy: text("locked_by"),

@@ -2,6 +2,7 @@
 
 import { getVersion } from "@/lib/version";
 import { MCPServersSection } from "@/components/settings/mcp-servers-section";
+import { CodingHarnessSection } from "@/components/settings/coding-harness-section";
 import { SessionRetentionSection } from "@/components/settings/session-retention-section";
 import { EnvKeysSection } from "@/components/settings/env-keys-section";
 
@@ -19,6 +20,7 @@ export default function SettingsPage() {
         </div>
 
         <MCPServersSection />
+        <CodingHarnessSection />
         <SessionRetentionSection />
         <EnvKeysSection />
 

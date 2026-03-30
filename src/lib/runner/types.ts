@@ -1,9 +1,12 @@
+import type { HarnessType } from "@/lib/harness/types";
+
 interface AgentConfig {
   name: string;
   enabled: boolean;
   schedule: string; // cron expression
   timezone?: string;
   envVars?: Record<string, string>;
+  harness?: HarnessType; // null/undefined = use global default
 }
 
 export interface AgentDefinition {

@@ -25,15 +25,6 @@ export const QA_TIMEOUT_MS = 30 * 60 * 1000;      // 30 min wait for reply
 export type { TelegramUpdate } from "@/lib/telegram/api";
 export type { IssuesSlackConfig, IssuesTransportConfig } from "./slack";
 
-export interface PipelinePhaseResult {
-  success: boolean;
-  output: string;
-  sessionId?: string;
-  hasQuestions?: boolean;
-  questions?: string;
-  timedOut?: boolean;
-}
-
 export interface IssuesTelegramConfig {
   botToken: string;
   chatId: string;

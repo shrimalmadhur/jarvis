@@ -9,6 +9,14 @@ mock.module("@/lib/utils/resolve-claude-path", () => ({
   resolveClaudePath: () => MOCK_CLAUDE_PATH,
 }));
 
+mock.module("@/lib/harness/resolve-codex-path", () => ({
+  resolveCodexPath: () => MOCK_CLAUDE_PATH,
+}));
+
+mock.module("@/lib/harness/run-phase", () => ({
+  getDefaultHarness: () => "claude",
+}));
+
 // Must import after mock setup
 const { runAgentTask, getAgentWorkspaceDir } = await import("../agent-runner");
 const { readWorkspaceMemory } = await import("../agent-memory");

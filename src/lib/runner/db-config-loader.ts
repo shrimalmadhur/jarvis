@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { agents, projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import type { HarnessType } from "@/lib/harness/types";
 import type { AgentDefinition } from "./types";
 
 /**
@@ -15,6 +16,7 @@ export function agentRowToDefinition(row: typeof agents.$inferSelect): AgentDefi
       schedule: row.schedule,
       timezone: row.timezone || undefined,
       envVars: (row.envVars as Record<string, string>) || {},
+      harness: (row.harness as HarnessType) || undefined,
     },
     soul: row.soul,
     skill: row.skill,

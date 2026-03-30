@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 const SETTINGS_VALIDATORS: Record<string, (v: string) => boolean> = {
   session_retention_days: (v) =>
     v === "" || (/^\d+$/.test(v) && parseInt(v, 10) >= 1 && parseInt(v, 10) <= 3650),
+  default_coding_harness: (v) =>
+    v === "" || v === "claude" || v === "codex",
 };
 
 export const GET = withErrorHandler(async () => {
